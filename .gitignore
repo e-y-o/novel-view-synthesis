@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+data/
+docs/
+node_modules/
+web/dist/
+*.pt
+*.safetensors
+*.ckpt
+.pytest_cache/
+.ruff_cache/
