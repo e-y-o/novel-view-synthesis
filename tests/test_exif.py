@@ -1,4 +1,5 @@
 """Tests for nvs.core.exif (EXIF -> focal length). Uses tiny synthetic images only; no real photos."""
+
 import math
 from pathlib import Path
 

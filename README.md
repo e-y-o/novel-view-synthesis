@@ -22,3 +22,12 @@ uv sync                            # creates .venv (Python 3.12) with PyTorch cu
 
 PyTorch comes from the CUDA 13.0 wheel index (configured in `pyproject.toml`);
 the stable cu130 build includes Blackwell `sm_120` kernels.
+
+### Development
+
+```powershell
+uv run ruff check          # lint
+uv run ruff format --check # formatting
+uv run pytest              # tests (gpu-marked tests skip without CUDA)
+uv run nvs --help          # CLI
+```

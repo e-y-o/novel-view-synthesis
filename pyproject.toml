@@ -26,6 +26,8 @@ depth-pro-2 = { git = "https://github.com/apple-aiml-research/ml-depth-pro-2", r
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.6",
 ]
 infill = [
     "accelerate>=1.16.0",
@@ -41,3 +43,20 @@ infill = [
 [build-system]
 requires = ["uv_build>=0.9,<0.14"]
 build-backend = "uv_build"
+
+[project.scripts]
+nvs = "nvs.cli.main:main"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: needs a CUDA GPU",
+    "slow: slow test",
+]

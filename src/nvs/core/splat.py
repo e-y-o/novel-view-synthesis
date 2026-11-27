@@ -5,6 +5,7 @@ splat(color[C,H,W], depth[H,W], f_px, R[3,3], t[3]) -> (image[C,H,W], hole_mask[
 camera pose in the source frame: P_target = R^T (P - t).
 Geometry is float32 and colour accumulation is float32 (fp16 atomics are imprecise and not faster here).
 """
+
 from __future__ import annotations
 
 import math
@@ -27,8 +28,11 @@ def splat(color, depth, f_px, R, t, sigma=0.03, eps=1e-2, timings=None):
             timings[name] = timings.get(name, 0) + (time.perf_counter() - t0) * 1000
 
     t0 = time.perf_counter()
-    v, u = torch.meshgrid(torch.arange(H, device=dev, dtype=torch.float32),
-                          torch.arange(W, device=dev, dtype=torch.float32), indexing="ij")
+    v, u = torch.meshgrid(
+        torch.arange(H, device=dev, dtype=torch.float32),
+        torch.arange(W, device=dev, dtype=torch.float32),
+        indexing="ij",
+    )
     z = depth.reshape(-1)
     dx = (u.reshape(-1) - cx) / f_px * z - t[0]
     dy = (v.reshape(-1) - cy) / f_px * z - t[1]
@@ -59,7 +63,9 @@ def splat(color, depth, f_px, R, t, sigma=0.03, eps=1e-2, timings=None):
     t0 = time.perf_counter()
     zmin = torch.full((H * W,), float("inf"), device=dev)
     for idx, _, ok in corners:
-        zmin.scatter_reduce_(0, idx, torch.where(ok, Zp, torch.full_like(Zp, float("inf"))), "amin", include_self=True)
+        zmin.scatter_reduce_(
+            0, idx, torch.where(ok, Zp, torch.full_like(Zp, float("inf"))), "amin", include_self=True
+        )
     tick("pass1_zmin", t0)
 
     t0 = time.perf_counter()
@@ -83,6 +89,8 @@ def orbit_pose(yaw_deg, pivot_z):
     """Camera orbits about the point (0,0,pivot_z) by yaw and keeps looking at it. Pure rotation about the
     camera centre has no parallax (no holes), so the benchmark/renders use an orbit."""
     a = math.radians(yaw_deg)
-    R = torch.tensor([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]], dtype=torch.float32)
+    R = torch.tensor(
+        [[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]], dtype=torch.float32
+    )
     p = torch.tensor([0.0, 0.0, pivot_z])
     return R, p - R @ p
