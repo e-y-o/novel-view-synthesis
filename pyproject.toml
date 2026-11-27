@@ -1,0 +1,20 @@
+[project]
+name = "nvs"
+version = "0.0.0"
+description = "Fast single-image novel view synthesis with a web GUI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
+]
+
+# PyTorch CUDA 13.0 wheels (stable). Needed for Blackwell (sm_120) support.
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
