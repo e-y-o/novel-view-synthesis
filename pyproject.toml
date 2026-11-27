@@ -54,6 +54,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["E501", "B023"]  # table-printing tools; benchmark lambdas run inside their loop iteration
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
