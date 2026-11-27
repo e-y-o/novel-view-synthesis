@@ -1,17 +1,7 @@
-"""Synthetic correctness test for the T06 splat spike (plane at 3 m, square at 1 m, camera 0.1 m right).
-The spike script lives in git-ignored scripts/spikes/, so the test skips if it is not present."""
-import importlib.util
-from pathlib import Path
-
-import pytest
+"""Synthetic correctness test for nvs.core.splat (plane at 3 m, square at 1 m, camera 0.1 m right)."""
 import torch
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "spikes" / "t06_splat.py"
-if not SCRIPT.exists():
-    pytest.skip("scripts/spikes/t06_splat.py not available", allow_module_level=True)
-spec = importlib.util.spec_from_file_location("t06_splat", SCRIPT)
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+from nvs.core import splat as mod
 
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 F, W, H = 500.0, 512, 384
