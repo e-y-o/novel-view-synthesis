@@ -19,7 +19,7 @@ WS_HOST = {"Host": f"127.0.0.1:{PORT}"}
 
 def make_client(tmp_path, **cfg) -> TestClient:
     cfg.setdefault("web_dist", tmp_path / "no-dist")
-    config = ServerConfig(port=PORT, data_dir=tmp_path, stub=True, **cfg)
+    config = ServerConfig(port=PORT, data_dir=tmp_path, stub=True, start_worker=False, **cfg)
     app = create_app(config)
 
     @app.post("/test/echo")

@@ -40,7 +40,9 @@ def created():
 
 @pytest.fixture
 def client(tmp_path, created):
-    config = ServerConfig(port=PORT, data_dir=tmp_path, stub=True, web_dist=tmp_path / "nodist")
+    config = ServerConfig(
+        port=PORT, data_dir=tmp_path, stub=True, web_dist=tmp_path / "nodist", start_worker=False
+    )
     app = create_app(config, on_created=created.append)
     with TestClient(app, base_url=f"http://127.0.0.1:{PORT}") as c:
         c.store = app.state.sessions
@@ -101,7 +103,9 @@ def test_too_many_pixels_is_413(client, monkeypatch):
 
 
 def test_upload_over_byte_limit_is_413(tmp_path):
-    config = ServerConfig(port=PORT, data_dir=tmp_path, max_upload_mb=0, web_dist=tmp_path / "x")
+    config = ServerConfig(
+        port=PORT, data_dir=tmp_path, max_upload_mb=0, web_dist=tmp_path / "x", start_worker=False
+    )
     with TestClient(create_app(config), base_url=f"http://127.0.0.1:{PORT}") as c:
         assert upload(c, make_image()).status_code == 413
 
