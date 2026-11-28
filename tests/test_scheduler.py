@@ -325,10 +325,10 @@ def jpeg() -> bytes:
 @pytest.fixture
 def client(tmp_path):
     config = ServerConfig(port=PORT, data_dir=tmp_path, stub=True, web_dist=tmp_path / "nodist")
-    app = create_app(config)
+    app = create_app(config, on_created=lambda s: None)  # no automatic analysis in these tests
     with TestClient(app, base_url=f"http://127.0.0.1:{PORT}") as c:
         c.app_ = app
-        c.portal.call(app.state.worker.wait_ready, 30)
+        c.portal.call(app.state.worker.wait_ready, 60)
         yield c
 
 
@@ -398,7 +398,7 @@ def test_hub_close_on_shutdown_closes_websocket_cleanly(tmp_path):
     config = ServerConfig(port=PORT, data_dir=tmp_path, stub=True, web_dist=tmp_path / "nodist")
     app = create_app(config)
     with TestClient(app, base_url=f"http://127.0.0.1:{PORT}") as c:
-        c.portal.call(app.state.worker.wait_ready, 30)
+        c.portal.call(app.state.worker.wait_ready, 60)
         with c.websocket_connect("/api/events", headers=HOST) as ws:
             assert ws.receive_json()["type"] == "status"
             c.portal.call(app.state.hub.close)

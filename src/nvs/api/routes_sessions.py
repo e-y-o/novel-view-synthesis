@@ -35,6 +35,7 @@ def make_sessions_router(
     store: SessionStore,
     max_upload_bytes: int,
     on_created: Callable[[Session], None] | None = None,
+    on_deleted: Callable[[str], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/sessions")
 
@@ -57,6 +58,7 @@ def make_sessions_router(
             raise HTTPException(413, str(e)) from e
         if on_created is not None:
             on_created(session)
+            session = store.get(session.id) or session  # the hook may have changed the state
         return {"id": session.id, "state": session.state, "filename": session.filename, "existing": existed}
 
     @router.get("")
@@ -89,6 +91,8 @@ def make_sessions_router(
     @router.delete("/{session_id}", status_code=204)
     async def delete_session(session_id: str) -> Response:
         require(session_id)
+        if on_deleted is not None:
+            on_deleted(session_id)
         await run_in_threadpool(store.delete, session_id)
         return Response(status_code=204)
 
