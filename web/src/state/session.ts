@@ -200,7 +200,7 @@ async function finishAnalysis(id: string): Promise<void> {
 export async function startUpload(file: File): Promise<void> {
   const check = validateFile(file);
   if (!check.ok) {
-    showError("unsupported_image", 415, check.message);
+    showError("unsupported_type", 0, check.message);
     return;
   }
   lastFile = file;

@@ -117,6 +117,27 @@ def create_app(
     app.include_router(make_events_router(hub, store, scheduler))
     app.include_router(make_render_router(store, scheduler, config.data_dir / "cache"))
 
+    if config.stub and config.dev:
+        # Test hooks for the browser tests (T15): only with `nvs serve --stub --dev`, never otherwise.
+        @app.post("/api/debug/kill-worker")
+        async def debug_kill_worker(restart: bool = True) -> dict:
+            """Kill the worker process. With ``restart=false`` it stays dead and jobs fail after 1 s."""
+            proc = worker.process
+            if proc is None or not proc.is_alive():
+                return {"killed": False}
+            if not restart:
+                worker.auto_restart = False
+                scheduler.worker_wait_s = 1.0
+            proc.kill()
+            return {"killed": True, "restart": restart}
+
+        @app.post("/api/debug/restart-worker")
+        async def debug_restart_worker() -> dict:
+            worker.auto_restart = True
+            scheduler.worker_wait_s = 30.0
+            await worker.restart()
+            return {"restarted": True}
+
     @app.api_route(
         "/api/{rest:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE"],

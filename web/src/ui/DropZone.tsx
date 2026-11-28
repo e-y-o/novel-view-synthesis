@@ -7,7 +7,11 @@ interface Props {
   onReject: (message: string) => void;
 }
 
-/** Empty state: drop a photo, choose one, or paste one (the paste handler lives in the app). */
+/**
+ * Empty state: drop a photo, choose one, or paste one (the paste handler lives in the app). The container is a
+ * plain group (clicking it also opens the dialog for mouse users); the only control for keyboard and assistive
+ * technology is the "Choose file" button, so there are no nested interactive elements.
+ */
 export function DropZone({ onFile, onReject }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -24,16 +28,9 @@ export function DropZone({ onFile, onReject }: Props) {
   return (
     <div
       class={`dropzone${over ? " over" : ""}`}
-      role="button"
-      tabIndex={0}
-      aria-label={`Drop a photo here, or press Enter to choose one. ${FORMATS_TEXT}.`}
+      role="group"
+      aria-label="Add a photo"
       onClick={choose}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          choose();
-        }
-      }}
       onDragOver={(e) => {
         e.preventDefault();
         setOver(true);

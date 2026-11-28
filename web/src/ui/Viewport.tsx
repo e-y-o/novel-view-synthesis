@@ -124,6 +124,14 @@ export function Viewport({ id, filename, meshCols }: Props) {
         r.resize();
         sync();
         r.setCamera(controller.camera);
+        if (new URLSearchParams(location.search).has("e2e")) {
+          // Test hook (browser tests only, opt-in by URL): lets them drive and read the live viewer.
+          (window as unknown as { __nvs?: unknown }).__nvs = {
+            renderer: r,
+            controller,
+            canvas: el,
+          };
+        }
         controllerSignal.value = controller;
         poseSignal.value = controller.orbit;
         pickModeSignal.value = false;
@@ -139,6 +147,7 @@ export function Viewport({ id, filename, meshCols }: Props) {
       cancelled = true;
       detach?.();
       keyCleanup?.();
+      delete (window as unknown as { __nvs?: unknown }).__nvs;
       logic?.dispose();
       observer?.disconnect();
       controller?.dispose();

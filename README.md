@@ -86,6 +86,20 @@ npm run fixtures                       # synthetic preview assets in web/fixture
 npm run typecheck; npm test; npm run lint; npm run format
 ```
 
+Browser tests (Playwright, in `web/e2e/`): they run the built app against `nvs serve --stub --dev` on port 8799 with a
+fresh data directory, using generated images only.
+
+```powershell
+cd web
+npm run e2e:chromium          # builds, then runs the Chromium suite (about 30 s); uses the installed Google Chrome
+npm run e2e                   # all browsers; Firefox and WebKit first need: npx playwright install firefox webkit
+$env:PLAYWRIGHT_REAL = "1"; npm run e2e:chromium -- real   # opt-in: real depth model, 12 MP upload timing
+```
+
+`npx playwright install` downloads the browsers (a few hundred MB, stored outside the repo); Chromium does not need it
+because the config uses the installed Chrome (`PW_CHANNEL=` empty switches to Playwright's own Chromium). Reports and
+artefacts go to `web/e2e-results/` (not tracked).
+
 `uv run nvs export-preview photo.jpg out_dir/` writes the browser preview assets (colour, depth, sky mask, meta)
 for a real photo. `dist`, `fixtures` and `node_modules` are not tracked.
 

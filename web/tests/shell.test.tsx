@@ -26,7 +26,7 @@ describe("DropZone", () => {
     const onFile = vi.fn();
     const onReject = vi.fn();
     render(<DropZone onFile={onFile} onReject={onReject} />);
-    const zone = screen.getByRole("button", { name: /drop a photo/i });
+    const zone = screen.getByRole("group", { name: "Add a photo" });
 
     const good = makeFile("a.jpg", "image/jpeg");
     fireEvent.drop(zone, { dataTransfer: { files: [good] } });
@@ -40,7 +40,7 @@ describe("DropZone", () => {
 
   it("highlights while dragging over and clears on leave or drop", () => {
     render(<DropZone onFile={vi.fn()} onReject={vi.fn()} />);
-    const zone = screen.getByRole("button", { name: /drop a photo/i });
+    const zone = screen.getByRole("group", { name: "Add a photo" });
     fireEvent.dragOver(zone);
     expect(zone.className).toContain("over");
     fireEvent.dragLeave(zone);
@@ -50,15 +50,15 @@ describe("DropZone", () => {
     expect(zone.className).not.toContain("over");
   });
 
-  it("is keyboard operable: Enter and Space open the file dialog", () => {
+  it("has one control for the keyboard: the Choose file button opens the dialog", () => {
     render(<DropZone onFile={vi.fn()} onReject={vi.fn()} />);
-    const zone = screen.getByRole("button", { name: /drop a photo/i });
-    expect(zone.getAttribute("tabindex")).toBe("0");
+    const group = screen.getByRole("group", { name: "Add a photo" });
+    expect(group.getAttribute("tabindex")).toBeNull(); // no nested interactive elements
     const input = screen.getByTestId("file-input") as HTMLInputElement;
     const click = vi.spyOn(input, "click").mockImplementation(() => undefined);
-    fireEvent.keyDown(zone, { key: "Enter" });
-    fireEvent.keyDown(zone, { key: " " });
-    fireEvent.keyDown(zone, { key: "a" });
+    fireEvent.click(screen.getByRole("button", { name: "Choose file" }));
+    expect(click).toHaveBeenCalledTimes(1); // the button's click does not also fire the container's
+    fireEvent.click(group); // mouse users can click anywhere in the zone
     expect(click).toHaveBeenCalledTimes(2);
   });
 

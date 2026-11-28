@@ -14,3 +14,4 @@ web/dist/
 scripts/spikes/
 checkpoints/
 web/fixtures/
+web/e2e-results/

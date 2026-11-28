@@ -12,10 +12,14 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "fixtures": "uv run --project .. python ../scripts/make_fixture_assets.py"
+    "fixtures": "uv run --project .. python ../scripts/make_fixture_assets.py",
+    "e2e": "npm run build && playwright test",
+    "e2e:chromium": "npm run build && playwright test --project=chromium"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "@testing-library/preact": "^3.2.6",
     "@types/node": "^22.20.7",
     "eslint": "^10.16.0",
