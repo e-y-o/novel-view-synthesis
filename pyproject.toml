@@ -3,6 +3,8 @@ name = "nvs"
 version = "0.0.0"
 description = "Fast single-image novel view synthesis with a web GUI"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "depth-pro-2",

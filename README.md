@@ -111,4 +111,5 @@ views for the tests.
 
 ## Licence of this repository
 
-The licence for this project's own code has not been chosen yet.
+This project's own code is licensed under the [Apache License 2.0](LICENSE). That covers this code only: model
+weights are separately licensed (see above) and are never distributed with it.
