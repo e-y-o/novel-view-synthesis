@@ -138,6 +138,7 @@ def package_preview(
     meta: ImageMeta | None = None,
     exif_bytes: bytes | None = None,
     cached: bool = False,
+    cache_key: str | None = None,
     warnings: list[str] | None = None,
 ) -> dict:
     """Write the four assets into ``out_dir`` (atomically) and return the ``meta.json`` content.
@@ -181,6 +182,7 @@ def package_preview(
             "model": depth_result.model,
             "infer_size": [int(v) for v in depth_result.infer_size],
             "cached": bool(cached),
+            "cache_key": cache_key,  # lets render jobs find the full-resolution depth in the depth cache
         },
         "pivot_z": float(choose_pivot(depth_result.depth, depth_result.sky_mask)),
         "exif": exif_summary(meta, exif_bytes),
