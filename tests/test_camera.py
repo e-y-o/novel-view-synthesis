@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -86,11 +87,13 @@ def test_pan_is_lateral_in_camera_axes():
     assert torch.allclose(t, torch.tensor([0.5, -0.25, 0.0]), atol=1e-6)
 
 
-def test_orbit_matches_m0_up_to_yaw_sign():
-    from nvs.core.splat import orbit_pose as m0
-
-    R0, t0 = m0(-12.0, 4.0)  # M0 positive yaw moved the camera left; M1 positive yaw moves it right
-    R1, t1 = orbit_pose(12.0, 0, 4.0)
+def test_orbit_matches_m0_formula_up_to_yaw_sign():
+    # M0 prototype: R = Ry(a), t = p - R p with p = (0, 0, pivot); its positive yaw moved the camera LEFT.
+    a, pivot = math.radians(-12.0), 4.0
+    R0 = torch.tensor([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]])
+    p = torch.tensor([0.0, 0.0, pivot])
+    t0 = p - R0 @ p
+    R1, t1 = orbit_pose(12.0, 0, pivot)
     assert torch.allclose(R0, R1, atol=1e-6) and torch.allclose(t0, t1, atol=1e-5)
 
 

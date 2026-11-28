@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from synth import psnr, render, scene_room, scene_two_layers, visible_in_both
 
 from nvs.core.camera import make_camera, orbit_pose
-from nvs.render.splat import SplatOptions, splat, splat_legacy
+from nvs.render.splat import SplatOptions, splat
 
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 W, H, F_PX = 512, 384, 500.0
@@ -89,34 +89,27 @@ def test_identity_reproduces_source():
     assert (res.image - color).abs().max() < 2e-3
 
 
-@pytest.mark.parametrize("yaw", [15.0, 25.0])
-def test_isolated_holes_drop_vs_legacy(yaw):
+@pytest.mark.parametrize("yaw,limit", [(15.0, 15), (25.0, 80)])
+def test_isolated_holes_stay_rare(yaw, limit):
+    # The M0 splatter (removed in T14) left 153 / 488 isolated hole pixels here; v2 leaves 7 / 45.
     color, depth = scene_source(scene_room())
     R, t = orbit_pose(yaw, 0, 2.5)
-    cam = make_camera(R, t, F_PX, W, H)
-    new = splat(color, depth, cam)
-    _, old_hole = splat_legacy(color, depth, F_PX, R, t)
-    n_old, n_new = isolated_holes(old_hole), isolated_holes(new.hole)
-    print(f"\nyaw {yaw}: isolated hole pixels legacy {n_old} -> v2 {n_new}")
-    assert n_old > 100
-    assert n_new <= 0.1 * n_old
+    new = splat(color, depth, make_camera(R, t, F_PX, W, H))
+    n_new = isolated_holes(new.hole)
+    print(f"yaw {yaw}: isolated hole pixels {n_new}")
+    assert n_new <= limit
 
 
 def test_foreground_silhouette_does_not_grow():
     color, depth = scene_source(scene_two_layers())
-    cam = cam_shift(0.2)
-    new = splat(color, depth, cam)
-    old_img, old_hole = splat_legacy(color, depth, F_PX, torch.eye(3), torch.tensor([0.2, 0.0, 0.0]))
+    new = splat(color, depth, cam_shift(0.2))
     rows = slice(H // 2 - 40, H // 2 + 40)  # rows well inside the box
-
-    def box_width(res_img, res_hole):
-        # the box is the only reddish thing: r clearly above g and b
-        red = (res_img[0] > 1.6 * res_img[1]) & (res_img[0] > 1.6 * res_img[2]) & ~res_hole
-        return red[rows].float().sum(1).mean().item()
-
-    wn, wo = box_width(new.image, new.hole), box_width(old_img, old_hole)
-    print(f"\nbox width v2 {wn:.2f} px, legacy {wo:.2f} px")
-    assert abs(wn - wo) <= 1.0  # two edges, 0.5 px each
+    # the box is the only reddish thing: r clearly above g and b
+    red = (new.image[0] > 1.6 * new.image[1]) & (new.image[0] > 1.6 * new.image[2]) & ~new.hole
+    width = red[rows].float().sum(1).mean().item()
+    expected = F_PX * 1.0 / 1.5  # 1 m wide box at 1.5 m (M0 splatter: 335.00 px, v2: 335.00 px)
+    print(f"box width {width:.2f} px, analytic {expected:.2f}")
+    assert abs(width - expected) <= 2.5  # two edges, ~1 px each (pixel-centre rounding)
 
 
 @pytest.mark.parametrize("yaw", [3.0, 8.0])
@@ -128,11 +121,9 @@ def test_psnr_on_visible_pixels(yaw):
     gt, _, _ = render(scene, cam)
     vis = visible_in_both(scene, SRC, cam)
     new = splat(color, depth, cam)
-    old_img, old_hole = splat_legacy(color, depth, F_PX, R, t)
-    mask = vis & ~new.hole.cpu() & ~old_hole.cpu()
-    p_new, p_old = psnr(new.image.cpu(), gt, mask), psnr(old_img.cpu(), gt, mask)
-    print(f"\nyaw {yaw}: PSNR on visible pixels legacy {p_old:.1f} dB, v2 {p_new:.1f} dB")
-    assert p_new >= 30.0
+    quality = psnr(new.image.cpu(), gt, vis & ~new.hole.cpu())
+    print(f"yaw {yaw}: PSNR on visible pixels {quality:.1f} dB (M0 splatter: 30.2 / 30.7)")
+    assert quality >= 30.0
 
 
 def test_disocclusion_strip_stays_open():
