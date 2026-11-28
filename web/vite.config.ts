@@ -17,7 +17,7 @@ export default defineConfig({
   // Only index.html is built; developer pages under dev/ and fixtures/ are served by the dev server only.
   build: { outDir: "dist", emptyOutDir: true },
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
     environment: "node",
   },
 });

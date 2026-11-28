@@ -8,6 +8,16 @@ export interface PreviewMeta extends PreviewMetaLite {
   height: number;
   pivot_z: number;
   scale: number;
+  filename?: string;
+  f_px_source: number;
+  intrinsics: { source: string; assumed: boolean; warnings: string[] };
+  exif?: {
+    make: string | null;
+    model: string | null;
+    f35: number | null;
+    orientation: number | null;
+  };
+  warnings?: string[];
 }
 
 export const SUPPORTED_SCHEMA = 1;
