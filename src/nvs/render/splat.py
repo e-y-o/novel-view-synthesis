@@ -109,28 +109,43 @@ def _footprint(up, vp, valid, depth, opts: SplatOptions):
     return r, disc, stretch
 
 
-def _bilinear_terms(up, vp, H, W):
-    x0, y0 = torch.floor(up), torch.floor(vp)
-    fx, fy = up - x0, vp - y0
-    x0, y0 = x0.long(), y0.long()
-    for ox, oy in ((0, 0), (1, 0), (0, 1), (1, 1)):
-        xi, yi = x0 + ox, y0 + oy
-        w = (fx if ox else 1 - fx) * (fy if oy else 1 - fy)
+TERM_CHUNK = 8_000_000  # max (source pixel x kernel tap) pairs processed per batch
+
+
+def _batched_terms(kind, ub, vb, rb, H, W):
+    """Yield (slice, idx, w, ok, taps) for chunks of source pixels.
+
+    All kernel taps of a chunk are laid out as one flat batch ``[taps * m]`` (tap-major), so a bucket costs a
+    handful of kernel launches per chunk instead of dozens per tap. ``kind`` is "bil" (2x2 bilinear), 3 or 5
+    (tent kernels of that width, radius ``rb``, peak weight 1, centred on the nearest target pixel).
+    """
+    if kind == "bil":
+        taps = 4
+        ox = torch.tensor([0, 1, 0, 1], device=ub.device)
+        oy = torch.tensor([0, 0, 1, 1], device=ub.device)
+    else:
+        k = 1 if kind == 3 else 2
+        rng = torch.arange(-k, k + 1, device=ub.device)
+        oy, ox = torch.meshgrid(rng, rng, indexing="ij")
+        ox, oy = ox.reshape(-1), oy.reshape(-1)
+        taps = ox.numel()
+    n = ub.shape[0]
+    step = max(1, TERM_CHUNK // taps)
+    for s in range(0, n, step):
+        sl = slice(s, min(n, s + step))
+        u, v = ub[sl][None], vb[sl][None]
+        if kind == "bil":
+            x0, y0 = torch.floor(u), torch.floor(v)
+            fx, fy = u - x0, v - y0
+            xi, yi = x0 + ox[:, None], y0 + oy[:, None]
+            w = torch.where(ox[:, None] == 1, fx, 1 - fx) * torch.where(oy[:, None] == 1, fy, 1 - fy)
+        else:
+            r = rb[sl][None]
+            xi, yi = torch.round(u) + ox[:, None], torch.round(v) + oy[:, None]
+            w = (1 - (xi - u).abs() / r).clamp_(min=0) * (1 - (yi - v).abs() / r).clamp_(min=0)
         ok = (xi >= 0) & (xi < W) & (yi >= 0) & (yi < H) & (w > 0)
-        yield yi.clamp(0, H - 1) * W + xi.clamp(0, W - 1), w, ok
-
-
-def _tent_terms(up, vp, r, k, H, W):
-    """(2k+1)^2 separable tent kernel of radius r (peak 1), centred on the nearest target pixel."""
-    xc, yc = torch.round(up), torch.round(vp)
-    for oy in range(-k, k + 1):
-        yi = yc + oy
-        wy = (1 - (yi - vp).abs() / r).clamp_(min=0)
-        for ox in range(-k, k + 1):
-            xi = xc + ox
-            w = wy * (1 - (xi - up).abs() / r).clamp_(min=0)
-            ok = (xi >= 0) & (xi < W) & (yi >= 0) & (yi < H) & (w > 0)
-            yield yi.clamp(0, H - 1).long() * W + xi.clamp(0, W - 1).long(), w, ok
+        idx = yi.clamp(0, H - 1).long() * W + xi.clamp(0, W - 1).long()
+        yield sl, idx.reshape(-1), w.reshape(-1), ok.reshape(-1), taps
 
 
 def splat(
@@ -192,35 +207,27 @@ def splat(
             buckets.append((kind, up_k[idx], vp_k[idx], Z_k[idx], r_k[idx], payload[idx]))
     del payload
 
-    def terms(b):
-        kind, ub, vb, _, rb, _ = b
-        if kind == "bil":
-            return _bilinear_terms(ub, vb, H, W)
-        return _tent_terms(ub, vb, rb, 1 if kind == 3 else 2, H, W)
-
     t0 = time.perf_counter()
     zmin = torch.full((H * W,), float("inf"), device=dev)
-    for b in buckets:
-        Zb = b[3]
-        for idx, w, ok in terms(b):
+    for kind, ub, vb, Zb, rb, _ in buckets:
+        for sl, idx, w, ok, taps in _batched_terms(kind, ub, vb, rb, H, W):
+            Zf = Zb[sl].repeat(taps)
             claim = ok & (w >= Z_CLAIM_MIN_WEIGHT)
-            zmin.scatter_reduce_(0, idx, torch.where(claim, Zb, torch.full_like(Zb, float("inf"))), "amin")
+            zmin.scatter_reduce_(0, idx, torch.where(claim, Zf, torch.full_like(Zf, float("inf"))), "amin")
     tick("pass1_zmin", t0)
 
     t0 = time.perf_counter()
     acc = torch.zeros(H * W, P + 1, device=dev)
-    for b in buckets:
-        Zb, pay = b[3], b[5]
-        for idx, w, ok in terms(b):
+    for kind, ub, vb, Zb, rb, pay in buckets:
+        for sl, idx, w, ok, taps in _batched_terms(kind, ub, vb, rb, H, W):
+            Zf = Zb[sl].repeat(taps)
             zm = zmin[idx]
             # surfaces behind the front one fade out; lighter-than-claim contributions in front keep weight w
             wt = torch.where(
-                ok, w * torch.exp(-(Zb - zm).clamp_(min=0) / (opts.sigma * zm)), torch.zeros_like(w)
+                ok, w * torch.exp(-(Zf - zm).clamp_(min=0) / (opts.sigma * zm)), torch.zeros_like(w)
             )
-            wt = torch.nan_to_num(
-                wt
-            )  # zm = inf (nothing claimed here) gives 0 * exp(-0) = fine, inf/inf guarded
-            acc.index_add_(0, idx, torch.cat([pay * wt[:, None], wt[:, None]], 1))
+            src = torch.cat([pay[sl].repeat(taps, 1) * wt[:, None], wt[:, None]], 1)
+            acc.index_add_(0, idx, src)
     tick("pass2_accum", t0)
 
     t0 = time.perf_counter()
