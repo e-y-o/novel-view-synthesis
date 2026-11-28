@@ -304,6 +304,30 @@ def test_result_download_headers_etag_and_privacy(client, sid):
     assert client.get(out["url"], headers={"If-None-Match": plain.headers["etag"]}).status_code == 304
 
 
+def test_download_filename_is_sanitised_ascii(client, sid):
+    from nvs.api.routes_render import download_name
+
+    out = client.post(f"/api/sessions/{sid}/render", json=pose(5, 0, 3.0)).json()
+    r = client.get(out["url"] + "?download=1&filename=holiday%20caf%C3%A9-view-yaw%2B5.0-pitch%2B0.0.png")
+    assert (
+        r.headers["content-disposition"] == 'attachment; filename="holiday cafe-view-yaw+5.0-pitch+0.0.png"'
+    )
+    bad = client.get(out["url"] + "?download=1&filename=..%2F..%5Cevil%3A%3F.exe")
+    assert bad.headers["content-disposition"] == 'attachment; filename="evil.png"'
+    assert (
+        client.get(out["url"] + "?download=1&filename=CON.png")
+        .headers["content-disposition"]
+        .endswith('"_CON.png"')
+    )
+    assert (
+        "content-disposition" not in client.get(out["url"] + "?filename=x.png").headers
+    )  # only with download=1
+    assert download_name(None, "my photo", ".png") == "my photo-view.png"
+    assert download_name("", "", ".jpg") == "image-view.jpg"
+    assert len(download_name("x" * 500 + ".png", "a", ".png")) <= 120
+    assert download_name("a.png", "a", ".jpg") == "a.jpg"  # the extension always matches the file
+
+
 @pytest.mark.parametrize(
     "name",
     ["..%2f..%2fsession.json", "..%5c..%5coriginal.jpg", "%2e%2e", "meta.json", "nope.png", "A.png", "x.gif"],

@@ -131,6 +131,38 @@ class LimitBody(BaseModel):
     count_out_of_frame: bool = False
 
 
+_WINDOWS_RESERVED = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+
+
+def download_name(requested: str | None, fallback_stem: str, suffix: str) -> str:
+    """A safe ASCII file name for Content-Disposition: ``requested`` if usable, else ``<stem>-view<suffix>``.
+
+    Only ``[A-Za-z0-9._ ()+-]`` survive, the extension is forced to ``suffix``, Windows reserved names get a
+    leading underscore, and the result is at most 120 characters.
+    """
+    import re
+    import unicodedata
+
+    def clean(text: str) -> str:
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+        text = re.sub(r"[^A-Za-z0-9._ ()+-]+", "_", text)
+        return text.strip(" ._")
+
+    stem = clean((requested or "").rsplit(".", 1)[0] if requested else "")
+    if not stem:
+        stem = (clean(fallback_stem) or "image") + "-view"
+    if stem.lower() in _WINDOWS_RESERVED:
+        stem = "_" + stem
+    return f"{stem[: 120 - len(suffix)]}{suffix}"
+
+
 def result_name(body: RenderBody, hole: str) -> str:
     """Content-addressed file name: identical requests map to the same file."""
 
@@ -257,7 +289,9 @@ def make_render_router(store: SessionStore, scheduler: Scheduler, cache_dir) -> 
         return {**data, "url": url}
 
     @router.get("/{session_id}/results/{name}")
-    async def get_result(session_id: str, name: str, request: Request, download: int = 0) -> Response:
+    async def get_result(
+        session_id: str, name: str, request: Request, download: int = 0, filename: str | None = None
+    ) -> Response:
         session = store.get(session_id)
         path = store.result_path(session_id, name) if session else None
         if session is None or path is None or path.suffix not in RESULT_TYPES:
@@ -270,9 +304,9 @@ def make_render_router(store: SessionStore, scheduler: Scheduler, cache_dir) -> 
         if request.headers.get("if-none-match") == headers["ETag"]:
             return Response(status_code=304, headers=headers)
         if download:
-            stem = session.filename.rsplit(".", 1)[0] or "image"
-            safe = "".join(c if c.isalnum() or c in " ._-()" else "_" for c in stem)[:80]
-            headers["Content-Disposition"] = f'attachment; filename="{safe}-view{path.suffix}"'
+            stem = session.filename.rsplit(".", 1)[0]
+            safe = download_name(filename, stem, path.suffix)
+            headers["Content-Disposition"] = f'attachment; filename="{safe}"'
         return FileResponse(path, media_type=RESULT_TYPES[path.suffix], headers=headers)
 
     return router
