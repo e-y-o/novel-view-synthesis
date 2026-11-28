@@ -126,6 +126,9 @@ class RenderBody(PoseBody):
 class LimitBody(BaseModel):
     orbit: Orbit
     max_hole_fraction: float | None = Field(default=None, gt=0.0, le=1.0)
+    # The viewer excludes area outside the photo by default: infill cannot invent it well, and a telephoto
+    # photo would otherwise hit the limit on out-of-frame area alone. The library default stays True.
+    count_out_of_frame: bool = False
 
 
 def result_name(body: RenderBody, hole: str) -> str:
@@ -210,6 +213,7 @@ def make_render_router(store: SessionStore, scheduler: Scheduler, cache_dir) -> 
                 **common(session_id),
                 "orbit": body.orbit.model_dump(),
                 "max_hole_fraction": body.max_hole_fraction,
+                "count_out_of_frame": body.count_out_of_frame,
             },
             priority=Priority.INTERACTIVE,
             session=session_id,

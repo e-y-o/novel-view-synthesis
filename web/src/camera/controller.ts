@@ -116,7 +116,7 @@ export class CameraController {
   private commitTimer = 0;
   private samples: { t: number; yaw: number; pitch: number }[] = [];
   private velocity: { yaw: number; pitch: number } | null = null; // degrees per ms
-  private anim: { from: OrbitParams; start: number } | null = null;
+  private anim: { from: OrbitParams; to: OrbitParams; start: number; ms: number } | null = null;
   private disposed = false;
   private pick = false;
 
@@ -268,7 +268,28 @@ export class CameraController {
       this.apply();
       return;
     }
-    this.anim = { from: copy(this.requested), start: this.clock.now() };
+    this.anim = {
+      from: copy(this.requested),
+      to: defaultOrbit(this.originalPivot),
+      start: this.clock.now(),
+      ms: RESET_MS,
+    };
+    this.schedule();
+  }
+
+  /**
+   * Animate from the orbit shown now to `target` (ease-out, `ms` long). Starts from the *allowed* orbit, so the
+   * elastic limit does not stall the start of the motion. Instant with reduced motion.
+   */
+  animateTo(target: OrbitParams, ms = 200): void {
+    this.stopMotion();
+    this.requested = copy(this.allowed);
+    if (this.reducedMotion() || ms <= 0) {
+      this.requested = copy(target);
+      this.apply();
+      return;
+    }
+    this.anim = { from: copy(this.requested), to: copy(target), start: this.clock.now(), ms };
     this.schedule();
   }
 
@@ -403,16 +424,17 @@ export class CameraController {
     this.lastFrameTime = time;
 
     if (this.anim) {
-      const t = clamp((time - this.anim.start) / RESET_MS, 0, 1);
+      const { from: f, to } = this.anim;
+      const t = clamp((time - this.anim.start) / this.anim.ms, 0, 1);
       const e = easeOut(t);
-      const f = this.anim.from;
+      const mix = (a: number, b: number): number => a + (b - a) * e;
       const r = this.requested;
-      r.yawDeg = f.yawDeg * (1 - e);
-      r.pitchDeg = f.pitchDeg * (1 - e);
-      r.dolly = f.dolly * (1 - e);
-      r.pan = [f.pan[0] * (1 - e), f.pan[1] * (1 - e)];
+      r.yawDeg = mix(f.yawDeg, to.yawDeg);
+      r.pitchDeg = mix(f.pitchDeg, to.pitchDeg);
+      r.dolly = mix(f.dolly, to.dolly);
+      r.pan = [mix(f.pan[0], to.pan[0]), mix(f.pan[1], to.pan[1])];
       if (t >= 1) {
-        this.requested = defaultOrbit(this.originalPivot);
+        this.requested = copy(to); // the pivot switches here: the identity pose does not depend on it
         this.anim = null;
       }
       this.dirty = true;
