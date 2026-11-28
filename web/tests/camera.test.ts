@@ -399,7 +399,9 @@ describe("choosePivot", () => {
 // ----------------------------------------------------------------- against the server's own assets
 describe("choosePivot on generated preview assets", () => {
   const dir = resolve(import.meta.dirname, "../fixtures");
-  const scenes = existsSync(dir) ? readdirSync(dir) : [];
+  const scenes = existsSync(dir)
+    ? readdirSync(dir).filter((name) => existsSync(resolve(dir, name, "meta.json")))
+    : [];
   it.skipIf(scenes.length === 0)(
     "matches the server's pivot_z within 1 % (run `npm run fixtures`)",
     () => {

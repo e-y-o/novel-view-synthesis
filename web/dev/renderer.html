@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- Developer page (not part of the production build): http://localhost:5173/dev/renderer.html?scene=two_layers
+     Needs `npm run fixtures`. Query: scene, cols (mesh columns, default 1024), size=fit|1080p|4k, cut, bench=1, debug=1. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Preview renderer (dev)</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #202428;
+        color: #cfd6dd;
+        font:
+          12px/1.4 ui-monospace,
+          Consolas,
+          monospace;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        touch-action: none;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+      #hud {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 4px;
+        white-space: pre;
+        pointer-events: none;
+      }
+      #help {
+        position: fixed;
+        left: 8px;
+        bottom: 8px;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl"></canvas>
+    <div id="hud"></div>
+    <div id="help">drag: orbit · wheel: dolly · dbl-click: reset · space: auto-orbit benchmark</div>
+    <script type="module" src="./renderer.ts"></script>
+  </body>
+</html>
