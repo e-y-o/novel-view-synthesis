@@ -280,12 +280,14 @@ def save_image(
     quality: int = 95,
     comment: str | None = None,
     keep_gps: bool = False,
+    png_compress_level: int = 3,
 ) -> None:
     """Write rgb [3, H, W] float in [0, 1] (sRGB) as PNG or JPEG (by extension), full resolution.
 
     alpha [H, W] in [0, 1]: PNG becomes RGBA; JPEG ignores it with a warning. With ``source`` the original
     EXIF is carried over (Orientation=1, pixel dimensions updated, thumbnail and MakerNote dropped, GPS
-    dropped unless ``keep_gps``); ``comment`` is stored as UserComment/ImageDescription.
+    dropped unless ``keep_gps``); ``comment`` is stored as UserComment/ImageDescription. PNG uses zlib level
+    ``png_compress_level`` (3: much faster than the default 6 at 12 MP, files a bit larger).
     """
     path = Path(path)
     ext = path.suffix.lower()
@@ -302,7 +304,9 @@ def save_image(
     if ext == ".png":
         if alpha is not None:
             arr = np.concatenate([arr, _to_uint8(alpha)[:, :, None]], axis=2)
-        Image.fromarray(np.ascontiguousarray(arr)).save(path, format="PNG", **kwargs)
+        Image.fromarray(np.ascontiguousarray(arr)).save(
+            path, format="PNG", compress_level=png_compress_level, **kwargs
+        )
     else:
         if alpha is not None:
             warnings.warn("JPEG has no alpha channel; alpha ignored", UserWarning, stacklevel=2)
