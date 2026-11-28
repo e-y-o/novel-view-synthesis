@@ -7,8 +7,11 @@ import {
   updateLimitSettings,
 } from "../state/viewer";
 import { CoverageMeter } from "./CoverageMeter";
+import { RenderPanel } from "./RenderPanel";
 
 interface Props {
+  sessionId: string | null;
+  filename: string;
   controller: CameraController | null;
   pose: OrbitParams | null;
   pickMode: boolean;
@@ -20,7 +23,15 @@ const fmt = (v: number, unit: string): string =>
   `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}${unit}`;
 
 /** Right-hand controls. T13 (coverage meter) and T14 (render) mount into the marked slots. */
-export function Panel({ controller, pose, pickMode, quality, onQuality }: Props) {
+export function Panel({
+  sessionId,
+  filename,
+  controller,
+  pose,
+  pickMode,
+  quality,
+  onQuality,
+}: Props) {
   const disabled = controller === null;
   return (
     <aside class="panel" aria-label="Controls">
@@ -67,8 +78,7 @@ export function Panel({ controller, pose, pickMode, quality, onQuality }: Props)
         countOutOfFrame={limitSettings.value.countOutOfFrame}
       />
       <LimitSettingsView />
-      {/* T14: render button mounts here */}
-      <section id="render-slot" aria-label="Render" />
+      <RenderPanel sessionId={sessionId} filename={filename} controller={controller} pose={pose} />
     </aside>
   );
 }

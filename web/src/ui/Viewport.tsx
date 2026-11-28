@@ -9,6 +9,7 @@ import {
 import { assetUrl } from "../api/sessions";
 import { PreviewRenderer, RendererUnsupportedError, fetchAssets } from "../gl";
 import { showError } from "../state/session";
+import { holdCompare, renderState, startRender } from "../state/render";
 import { ViewerLogic } from "../state/viewer";
 
 /** The live controller and pose, for the panel (reset button, pose readout, pick toggle). */
@@ -18,6 +19,8 @@ export const pickModeSignal = signal(false);
 
 interface Props {
   id: string;
+  /** Original file name, for the download name. */
+  filename: string;
   /** Mesh columns: 512 = 1×, 1024 = 2×. The renderer is rebuilt when it changes. */
   meshCols: number;
 }
@@ -26,7 +29,10 @@ interface Props {
  * The 3D preview: renderer + controller on one canvas. Owns every resource it creates and frees them when the
  * session or the quality changes or the component unmounts.
  */
-export function Viewport({ id, meshCols }: Props) {
+export function Viewport({ id, filename, meshCols }: Props) {
+  const nameRef = useRef(filename);
+  nameRef.current = filename;
+  const filenameOf = (): string => nameRef.current;
   const canvas = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
 
@@ -37,6 +43,7 @@ export function Viewport({ id, meshCols }: Props) {
     let renderer: PreviewRenderer | null = null;
     let controller: CameraController | null = null;
     let logic: ViewerLogic | null = null;
+    let keyCleanup: (() => void) | null = null;
     let detach: (() => void) | null = null;
     let observer: ResizeObserver | null = null;
     setReady(false);
@@ -82,6 +89,33 @@ export function Viewport({ id, meshCols }: Props) {
         });
         logic = new ViewerLogic(id, controller);
         detach = attachControllerInput(controller, el);
+        // Enter renders the current view; Space held compares with the last result (no scrolling).
+        const c = controller;
+        const onKeyDown = (e: KeyboardEvent): void => {
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.key === "Enter" && !e.repeat) {
+            e.preventDefault();
+            void startRender(id, c.camera, c.orbit, filenameOf());
+          } else if (e.key === " " && renderState.value.outcome) {
+            e.preventDefault();
+            holdCompare.value = true;
+          }
+        };
+        const onKeyUp = (e: KeyboardEvent): void => {
+          if (e.key === " ") holdCompare.value = false;
+        };
+        const onBlur = (): void => {
+          holdCompare.value = false;
+        };
+        el.addEventListener("keydown", onKeyDown);
+        el.addEventListener("keyup", onKeyUp);
+        el.addEventListener("blur", onBlur);
+        keyCleanup = () => {
+          el.removeEventListener("keydown", onKeyDown);
+          el.removeEventListener("keyup", onKeyUp);
+          el.removeEventListener("blur", onBlur);
+          holdCompare.value = false;
+        };
         observer = new ResizeObserver(() => {
           r.resize();
           sync();
@@ -104,6 +138,7 @@ export function Viewport({ id, meshCols }: Props) {
     return () => {
       cancelled = true;
       detach?.();
+      keyCleanup?.();
       logic?.dispose();
       observer?.disconnect();
       controller?.dispose();

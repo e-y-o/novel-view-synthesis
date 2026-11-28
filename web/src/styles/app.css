@@ -526,3 +526,79 @@ select {
   text-align: right;
   font-family: var(--mono);
 }
+
+/* ---- render ---- */
+.render .row {
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+.btn.wide {
+  width: 100%;
+  margin: var(--space-2) 0;
+}
+a.btn {
+  display: inline-block;
+  text-decoration: none;
+}
+.field.compact {
+  margin: 0;
+  gap: var(--space-2);
+}
+.render-running {
+  margin: var(--space-2) 0;
+}
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.inline-error {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 4px solid var(--danger);
+  background: var(--bg);
+}
+.badge {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+}
+.badge.warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn);
+}
+.result {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.result-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none; /* the camera underneath stays usable by mouse and keyboard */
+  background: var(--bg);
+}
+.result-overlay.checker {
+  background: conic-gradient(#8b8b8b 25%, #c4c4c4 0 50%, #8b8b8b 0 75%, #c4c4c4 0) 0 0 / 16px 16px;
+}
+.result-overlay img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}

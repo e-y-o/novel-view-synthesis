@@ -23,7 +23,9 @@ import { Panel } from "./ui/Panel";
 import { ProgressView } from "./ui/ProgressView";
 import { RecentList } from "./ui/RecentList";
 import { TopBar } from "./ui/TopBar";
+import { ResultOverlay } from "./ui/ResultOverlay";
 import { Viewport, controllerSignal, pickModeSignal, poseSignal } from "./ui/Viewport";
+import { resetRender } from "./state/render";
 import { firstImageFile, parseHash } from "./ui/helpers";
 
 function applyHash(): void {
@@ -66,6 +68,11 @@ export function App() {
     const t = window.setTimeout(clearBlur, 600);
     return () => window.clearTimeout(t);
   }, [ready, v.blurUrl]);
+
+  // a result belongs to one session
+  useEffect(() => {
+    resetRender();
+  }, [v.id]);
 
   const choose = (): void => {
     dismissError();
@@ -110,11 +117,20 @@ export function App() {
               </div>
             </div>
           )}
-          {ready && v.id && <Viewport id={v.id} meshCols={meshQuality.value === 1 ? 512 : 1024} />}
+          {ready && <ResultOverlay />}
+          {ready && v.id && (
+            <Viewport
+              id={v.id}
+              filename={v.filename}
+              meshCols={meshQuality.value === 1 ? 512 : 1024}
+            />
+          )}
         </div>
         <div class="side">
           {ready ? (
             <Panel
+              sessionId={v.id}
+              filename={v.filename}
               controller={controllerSignal.value}
               pose={poseSignal.value}
               pickMode={pickModeSignal.value}
