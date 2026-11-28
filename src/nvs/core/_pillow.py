@@ -1,4 +1,6 @@
-"""Registers optional Pillow plugins once; import for the side effect."""
+"""Registers optional Pillow plugins once (import for the side effect). Torch-free."""
+
+MAX_PIXELS = 100_000_000  # largest accepted image, in pixels
 
 try:
     import pillow_heif

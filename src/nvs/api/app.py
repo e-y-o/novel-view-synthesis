@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -11,7 +12,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from nvs.api.config import ServerConfig
+from nvs.api.routes_sessions import make_sessions_router
 from nvs.api.security import SecurityMiddleware
+from nvs.api.sessions import Session, SessionStore
 
 FALLBACK_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>nvs</title></head>
@@ -38,10 +41,14 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
 
-def create_app(config: ServerConfig | None = None) -> FastAPI:
+def create_app(
+    config: ServerConfig | None = None, on_created: Callable[[Session], None] | None = None
+) -> FastAPI:
     config = config or ServerConfig()
     app = FastAPI(title="nvs", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.config = config
+    store = SessionStore(config.data_dir / "sessions")
+    app.state.sessions = store
 
     @app.exception_handler(HTTPException)
     async def _http_error(_: Request, exc: HTTPException) -> JSONResponse:
@@ -50,6 +57,8 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
     @app.get("/api/health")
     async def health() -> dict:
         return {"ok": True, "version": _version(), "stub": config.stub}
+
+    app.include_router(make_sessions_router(store, config.max_upload_bytes, on_created))
 
     @app.api_route(
         "/api/{rest:path}",
