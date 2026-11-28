@@ -61,6 +61,33 @@ the view is fast: about 1 s for a 12 MP photo, against about 7 s the first time 
 Supported inputs: JPEG, PNG, HEIC/HEIF, WebP (EXIF orientation and embedded colour profiles such as Display P3
 are handled; output is sRGB, keeps the source EXIF without GPS). Outputs: PNG or JPEG.
 
+## Web app (work in progress)
+
+`nvs serve` starts a local server on `127.0.0.1:8765` (loopback only; it rejects requests that do not come from
+its own page). The browser app lives in `web/` (TypeScript, Vite, Preact, raw WebGL2); Node 20+ is needed to
+build it.
+
+```powershell
+cd web
+npm ci
+npm run build                 # writes web/dist, which `nvs serve` hosts at /
+cd ..
+uv run nvs serve              # real depth model (asks to accept the licence once)
+uv run nvs serve --stub       # no GPU, fake depth: for UI work and tests
+```
+
+Frontend development (hot reload, `/api` proxied to the Python server):
+
+```powershell
+uv run nvs serve --stub --dev          # terminal 1: --dev also accepts the Vite page's origin
+cd web; npm run dev                    # terminal 2: http://localhost:5173
+npm run fixtures                       # synthetic preview assets in web/fixtures/ (no server or model needed)
+npm run typecheck; npm test; npm run lint; npm run format
+```
+
+`uv run nvs export-preview photo.jpg out_dir/` writes the browser preview assets (colour, depth, sky mask, meta)
+for a real photo. `dist`, `fixtures` and `node_modules` are not tracked.
+
 ## Known limits
 
 - Holes are only **marked**. Filling them (background fill, generative infill) is planned.
