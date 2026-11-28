@@ -276,11 +276,17 @@ describe("JSON contract", () => {
     expect(json.t[0]).toBe(0);
   });
 
-  it("clampOrbit is an identity stub until T13", () => {
-    const p: OrbitParams = { yawDeg: 99, pitchDeg: 5, dolly: 1, pan: [1, 2], pivotZ: 3 };
-    const out = clampOrbit(p, { maxYawDeg: 10, maxPitchDeg: 10, maxDolly: 1, maxPan: 1 });
+  it("clampOrbit leaves angles inside the limits alone and resists beyond them", () => {
+    const p: OrbitParams = { yawDeg: 5, pitchDeg: -3, dolly: 1, pan: [1, 2], pivotZ: 3 };
+    const limits = { yawPlusDeg: 10, yawMinusDeg: 10, pitchPlusDeg: 10, pitchMinusDeg: 10 };
+    const out = clampOrbit(p, limits);
     expect(out).toEqual(p);
     expect(out.pan).not.toBe(p.pan);
+    const far = clampOrbit({ ...p, yawDeg: 80, pitchDeg: -80 }, limits);
+    expect(far.yawDeg).toBeGreaterThan(7);
+    expect(far.yawDeg).toBeLessThan(10);
+    expect(far.pitchDeg).toBeLessThan(-7);
+    expect(far.pitchDeg).toBeGreaterThan(-10);
   });
 });
 

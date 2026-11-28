@@ -192,6 +192,7 @@ def test_limit_matches_direct_call(client, sid):
         max_hole_fraction=0.1,
         dolly=0.2,
         pan=(0.05, 0.0),
+        count_out_of_frame=False,  # the API default: the viewer does not count the area outside the photo
     )
     assert set(got) == {"scale", "yaw_deg", "pitch_deg", "dolly", "pan", "hole_fraction", "limited"}
     assert got["scale"] == pytest.approx(want.scale, abs=1e-9)
@@ -200,6 +201,22 @@ def test_limit_matches_direct_call(client, sid):
     assert got["hole_fraction"] == pytest.approx(want.hole_fraction, abs=1e-6)
     # default max_hole_fraction is the library default
     assert client.post(f"/api/sessions/{sid}/limit", json={"orbit": orbit}).status_code == 200
+
+
+def test_limit_count_out_of_frame_option(client, sid):
+    """The viewer excludes the area outside the photo by default; including it can only limit more."""
+    _, meta = session_depth(client, sid)
+    orbit = {"yaw_deg": 30.0, "pitch_deg": 0.0, "dolly": 0.0, "pan": [0.0, 0.0], "pivot_z": meta["pivot_z"]}
+    base = {"orbit": orbit, "max_hole_fraction": 0.1}
+    excluded = client.post(f"/api/sessions/{sid}/limit", json=base).json()  # default: not counted
+    counted = client.post(f"/api/sessions/{sid}/limit", json={**base, "count_out_of_frame": True}).json()
+    assert excluded["scale"] >= counted["scale"]
+    depth, _ = session_depth(client, sid)
+    want = limit_orbit(
+        depth.depth, depth.f_px, 30.0, 0.0, meta["pivot_z"], max_hole_fraction=0.1, count_out_of_frame=False
+    )
+    assert excluded["scale"] == pytest.approx(want.scale, abs=1e-9)
+    assert excluded["hole_fraction"] == pytest.approx(want.hole_fraction, abs=1e-6)
 
 
 # --------------------------------------------------------------------------------------------- render

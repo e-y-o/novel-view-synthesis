@@ -1,5 +1,12 @@
-import type { OrbitParams } from "../camera";
-import type { CameraController } from "../camera";
+import type { CameraController, OrbitParams } from "../camera";
+import {
+  MAX_LIMIT,
+  MIN_LIMIT,
+  coverageView,
+  limitSettings,
+  updateLimitSettings,
+} from "../state/viewer";
+import { CoverageMeter } from "./CoverageMeter";
 
 interface Props {
   controller: CameraController | null;
@@ -54,10 +61,61 @@ export function Panel({ controller, pose, pickMode, quality, onQuality }: Props)
           Drag to orbit · right-drag or shift-drag to pan · scroll to zoom · double-click to reset
         </p>
       </section>
-      {/* T13: coverage meter mounts here */}
-      <section id="coverage-slot" aria-label="Coverage" />
+      <CoverageMeter
+        coverage={coverageView.value.value}
+        stale={coverageView.value.stale}
+        countOutOfFrame={limitSettings.value.countOutOfFrame}
+      />
+      <LimitSettingsView />
       {/* T14: render button mounts here */}
       <section id="render-slot" aria-label="Render" />
     </aside>
+  );
+}
+
+/** "Limit moves" toggle, the hole-fraction slider and the out-of-frame option. */
+function LimitSettingsView() {
+  const s = limitSettings.value;
+  return (
+    <section aria-label="Move limit" class="limit">
+      <label
+        class="check"
+        title="The view resists moves that would leave more than this share of holes, and eases back when you let go."
+      >
+        <input
+          type="checkbox"
+          checked={s.enabled}
+          onChange={(e) => updateLimitSettings({ enabled: e.currentTarget.checked })}
+        />
+        <span>Limit moves</span>
+      </label>
+      <label class="field slider">
+        <span>Largest hole share</span>
+        <input
+          type="range"
+          min={MIN_LIMIT * 100}
+          max={MAX_LIMIT * 100}
+          step={1}
+          value={Math.round(s.maxFraction * 100)}
+          disabled={!s.enabled}
+          aria-label="Largest share of holes allowed"
+          aria-valuetext={`${Math.round(s.maxFraction * 100)} percent`}
+          onInput={(e) => updateLimitSettings({ maxFraction: Number(e.currentTarget.value) / 100 })}
+        />
+        <output>{Math.round(s.maxFraction * 100)} %</output>
+      </label>
+      <label
+        class="check"
+        title="Off by default: infill cannot invent a good border, and a telephoto photo would otherwise hit the limit on that area alone."
+      >
+        <input
+          type="checkbox"
+          checked={s.countOutOfFrame}
+          disabled={!s.enabled}
+          onChange={(e) => updateLimitSettings({ countOutOfFrame: e.currentTarget.checked })}
+        />
+        <span>Count area outside the photo</span>
+      </label>
+    </section>
   );
 }

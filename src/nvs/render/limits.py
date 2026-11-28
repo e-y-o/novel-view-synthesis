@@ -79,9 +79,12 @@ def limit_orbit(
     dolly: float = 0.0,
     pan: tuple[float, float] = (0.0, 0.0),
     max_mp: float = 0.25,
+    count_out_of_frame: bool = True,
 ) -> LimitResult:
     """Largest ``scale`` in [0, 1] such that ``scale * (yaw, pitch, dolly, pan)`` keeps the total hole
-    fraction (out-of-frame included) at or below ``max_hole_fraction``.
+    fraction at or below ``max_hole_fraction``. Out-of-frame holes count unless ``count_out_of_frame`` is
+    False (a telephoto photo reaches the limit through out-of-frame area alone, which infill could not fill
+    well anyway); ``hole_fraction`` of the result is the counted fraction.
 
     Bisection with at most 8 splats. The hole fraction grows with the move on typical scenes (see the
     monotonicity tests); if it ever does not, bisection still returns a scale whose fraction was measured to
@@ -98,7 +101,8 @@ def limit_orbit(
         )
         cam = make_camera(R, t, f_small, w, h)
         res = splat(gray, small, cam, options=SplatOptions(extra_channels=True))
-        return classify_holes(res, small, cam).coverage["total"]
+        cov = classify_holes(res, small, cam).coverage
+        return cov["total"] if count_out_of_frame else cov["total"] - cov["out_of_frame"]
 
     def result(scale: float, frac: float) -> LimitResult:
         return LimitResult(

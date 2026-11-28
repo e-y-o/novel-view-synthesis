@@ -429,3 +429,100 @@ select {
 .recent {
   margin-top: var(--space-4);
 }
+
+/* ---- coverage meter ---- */
+.meter h2 {
+  margin: 0 0 var(--space-2);
+}
+.meter.stale .meter-track,
+.meter.stale .meter-total,
+.meter.stale .legend {
+  opacity: 0.55;
+}
+.meter-total {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.meter-level {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+.meter-level.calm {
+  color: var(--ok);
+}
+.meter-level.warn {
+  color: var(--warn);
+}
+.meter-level.danger {
+  color: var(--danger);
+}
+.meter-track {
+  position: relative;
+  display: flex;
+  height: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.meter-track.empty {
+  opacity: 0.5;
+}
+.meter .seg {
+  flex: none;
+  height: 100%;
+  transition: width 120ms linear;
+}
+.seg.disocclusion,
+.swatch.disocclusion {
+  background: #e5484d;
+}
+.seg.stretch,
+.swatch.stretch {
+  background: repeating-linear-gradient(45deg, #2fa866 0 3px, #14502f 3px 6px);
+}
+.seg.out_of_frame,
+.swatch.out_of_frame {
+  background:
+    radial-gradient(circle, #cfe2ff 1px, transparent 1.5px) 0 0 / 5px 5px,
+    #3b6fd8;
+}
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--fg);
+  opacity: 0.55;
+}
+.legend {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--fg-muted);
+}
+.swatch {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-right: var(--space-2);
+  vertical-align: -1px;
+  border-radius: 2px;
+}
+.limit .check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.limit .slider input {
+  flex: 1;
+  min-width: 0;
+}
+.limit .slider output {
+  min-width: 2.6em;
+  text-align: right;
+  font-family: var(--mono);
+}

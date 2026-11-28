@@ -197,20 +197,48 @@ export function poseToJson(pose: CameraSpec, orbit?: OrbitParams): PoseJson {
   return json;
 }
 
-/** Limits for the elastic orbit clamp (T13). */
+/**
+ * Largest orbit angle the user may reach in each direction before the view would show too many holes
+ * (degrees, from the server's `/limit`). `Infinity` = unlimited. `yawPlus` is the limit for `yawDeg > 0`.
+ */
 export interface OrbitLimits {
-  /** Largest |yaw| / |pitch| [deg], |dolly| and |pan| components [m] the user may reach. */
-  maxYawDeg: number;
-  maxPitchDeg: number;
-  maxDolly: number;
-  maxPan: number;
+  yawPlusDeg: number;
+  yawMinusDeg: number;
+  pitchPlusDeg: number;
+  pitchMinusDeg: number;
+}
+
+/** Where the rubber band starts to resist, as a fraction of the limit `A`. */
+export const RUBBER_KNEE = 0.7;
+
+/**
+ * Rubber-band resistance: the angle shown for a requested magnitude `x >= 0` against a limit `A`.
+ * Identity up to the knee `k·A` (`k = RUBBER_KNEE`), then a smooth exponential approach to `A`:
+ * `kA + (1-k)A · (1 - exp(-(x - kA) / ((1-k)A)))`. Continuous, strictly increasing, with slope 1 at the knee
+ * (no kink) and never reaching `A`: a soft wall, not a hard stop. `A <= 0` gives 0; `A = Infinity` the identity.
+ */
+export function rubberBand(x: number, limit: number): number {
+  if (!(x > 0)) return x;
+  if (limit === Infinity) return x;
+  if (!(limit > 0)) return 0;
+  const knee = RUBBER_KNEE * limit;
+  if (x <= knee) return x;
+  const span = limit - knee;
+  return knee + span * (1 - Math.exp(-(x - knee) / span));
 }
 
 /**
- * Soft ("rubber band") clamp of orbit parameters to `limits`, used by the interaction layer.
- *
- * Stub: returns a copy of `params` unchanged until T13 implements the elastic behaviour.
+ * Soft ("rubber band") clamp of the orbit angles to `limits`: yaw and pitch go through `rubberBand` in their own
+ * direction, everything else is untouched. Pure; used as the controller's soft limit.
  */
-export function clampOrbit(params: OrbitParams, _limits: OrbitLimits): OrbitParams {
-  return { ...params, pan: [params.pan[0], params.pan[1]] };
+export function clampOrbit(params: OrbitParams, limits: OrbitLimits): OrbitParams {
+  const yaw =
+    params.yawDeg >= 0
+      ? rubberBand(params.yawDeg, limits.yawPlusDeg)
+      : -rubberBand(-params.yawDeg, limits.yawMinusDeg);
+  const pitch =
+    params.pitchDeg >= 0
+      ? rubberBand(params.pitchDeg, limits.pitchPlusDeg)
+      : -rubberBand(-params.pitchDeg, limits.pitchMinusDeg);
+  return { ...params, yawDeg: yaw, pitchDeg: pitch, pan: [params.pan[0], params.pan[1]] };
 }

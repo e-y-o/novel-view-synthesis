@@ -9,6 +9,7 @@ import {
 import { assetUrl } from "../api/sessions";
 import { PreviewRenderer, RendererUnsupportedError, fetchAssets } from "../gl";
 import { showError } from "../state/session";
+import { ViewerLogic } from "../state/viewer";
 
 /** The live controller and pose, for the panel (reset button, pose readout, pick toggle). */
 export const controllerSignal = signal<CameraController | null>(null);
@@ -35,6 +36,7 @@ export function Viewport({ id, meshCols }: Props) {
     let cancelled = false;
     let renderer: PreviewRenderer | null = null;
     let controller: CameraController | null = null;
+    let logic: ViewerLogic | null = null;
     let detach: (() => void) | null = null;
     let observer: ResizeObserver | null = null;
     setReady(false);
@@ -57,7 +59,9 @@ export function Viewport({ id, meshCols }: Props) {
           onChange: (orbit, camera) => {
             poseSignal.value = orbit;
             r.setCamera(camera); // requests one draw
+            logic?.onChange(orbit, camera);
           },
+          onCommit: (orbit) => void logic?.onCommit(orbit),
           onPickMode: (on) => {
             pickModeSignal.value = on;
             el.style.cursor = on ? "crosshair" : "grab";
@@ -76,6 +80,7 @@ export function Viewport({ id, meshCols }: Props) {
               : null;
           },
         });
+        logic = new ViewerLogic(id, controller);
         detach = attachControllerInput(controller, el);
         observer = new ResizeObserver(() => {
           r.resize();
@@ -99,6 +104,7 @@ export function Viewport({ id, meshCols }: Props) {
     return () => {
       cancelled = true;
       detach?.();
+      logic?.dispose();
       observer?.disconnect();
       controller?.dispose();
       renderer?.dispose();

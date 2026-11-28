@@ -110,7 +110,11 @@ export function attachControllerInput(
   const onDown = (e: PointerLike): void => {
     const p = local(e);
     pointers.set(e.pointerId, p);
-    el.setPointerCapture?.(e.pointerId);
+    try {
+      el.setPointerCapture?.(e.pointerId);
+    } catch {
+      /* not an active pointer (synthetic events, a pointer that just ended): dragging still works */
+    }
     el.focus?.();
     controller.beginGesture();
     moved = 0;
@@ -155,7 +159,11 @@ export function attachControllerInput(
     if (!pointers.has(e.pointerId)) return;
     const wasPinch = mode === "pinch";
     pointers.delete(e.pointerId);
-    el.releasePointerCapture?.(e.pointerId);
+    try {
+      el.releasePointerCapture?.(e.pointerId);
+    } catch {
+      /* capture was never taken */
+    }
     if (pointers.size > 0) {
       // one finger left after a pinch: carry on as a pan without a jump
       const only = [...pointers.values()][0];

@@ -77,6 +77,20 @@ def test_limit_orbit_large_move_is_limited():
     assert loose.scale >= r.scale
 
 
+def test_count_out_of_frame_option():
+    """Excluding out-of-frame area lets a move go further; the reported fraction is the counted one."""
+    _, depth = source(scene_two_layers())
+    args = (depth, F_PX, 25.0, 0.0, 2.5)
+    counted = limit_orbit(*args)
+    excluded = limit_orbit(*args, count_out_of_frame=False)
+    assert counted.limited and excluded.scale >= counted.scale
+    assert limit_orbit(*args, count_out_of_frame=True).scale == counted.scale  # the default is True
+    R, t = orbit_pose(excluded.yaw_deg, excluded.pitch_deg, 2.5, excluded.dolly, excluded.pan)
+    cov = estimate_coverage(depth, F_PX, R, t)
+    assert cov["total"] - cov["out_of_frame"] == pytest.approx(excluded.hole_fraction, abs=1e-6)
+    assert excluded.hole_fraction <= 0.12 + 0.01
+
+
 def test_hole_fraction_monotone_in_scale():
     _, depth = source(scene_room())
     prev = -1.0

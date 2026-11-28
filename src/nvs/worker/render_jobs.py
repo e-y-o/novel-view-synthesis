@@ -168,6 +168,7 @@ def limit(ctx: JobContext, payload: dict[str, Any]) -> dict[str, Any]:
             float(o["pitch_deg"]),
             float(o["pivot_z"]),
             max_hole_fraction=float(payload.get("max_hole_fraction") or 0.12),
+            count_out_of_frame=bool(payload.get("count_out_of_frame", True)),
             dolly=float(o.get("dolly", 0.0)),
             pan=(float(o["pan"][0]), float(o["pan"][1])) if o.get("pan") else (0.0, 0.0),
         )
