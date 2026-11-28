@@ -520,3 +520,49 @@ describe("ViewerLogic", () => {
     expect(m.fetchCoverage.mock.calls.length).toBeLessThanOrEqual(1);
   });
 });
+
+describe("LatestWinsLoop rate cap", () => {
+  it("never starts requests closer together than the interval, and still ends on the newest pose", async () => {
+    let time = 0;
+    const timers: { at: number; cb: () => void }[] = [];
+    const frames: (() => void)[] = [];
+    const starts: number[] = [];
+    const payloads: number[] = [];
+    const results: number[] = [];
+    const loop = new LatestWinsLoop<number, number>({
+      send: async (payload) => {
+        starts.push(time);
+        payloads.push(payload);
+        return payload; // an instant server: only the rate cap can slow the loop down
+      },
+      onResult: (r) => results.push(r),
+      frame: (cb) => frames.push(cb),
+      cancelFrame: () => undefined,
+      minIntervalMs: 33,
+      now: () => time,
+      setTimer: (cb, ms) => timers.push({ at: time + ms, cb }),
+      clearTimer: () => undefined,
+    });
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+    for (let step = 0; step < 1000; step += 1) {
+      time = step; // a pose update every millisecond for one second
+      loop.update(step);
+      frames.splice(0).forEach((f) => f());
+      for (const t of timers.filter((t) => t.at <= time)) {
+        timers.splice(timers.indexOf(t), 1);
+        t.cb();
+      }
+      if (step % 5 === 0) await settle();
+    }
+    await settle();
+    expect(starts.length).toBeLessThanOrEqual(Math.ceil(1000 / 33) + 1); // about 30 per second
+    expect(starts.length).toBeGreaterThan(20);
+    for (let i = 1; i < starts.length; i += 1)
+      expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(33);
+    // after the burst the last pose still arrives
+    time = 2000;
+    for (const t of timers.splice(0)) t.cb();
+    await settle();
+    expect(results.at(-1)).toBe(999);
+  });
+});

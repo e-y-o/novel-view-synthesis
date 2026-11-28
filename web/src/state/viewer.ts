@@ -87,6 +87,9 @@ export interface ViewerDeps {
   onError?: (e: unknown) => void;
 }
 
+/** At most about 30 coverage requests per second while dragging (one animation-frame pair at 60 Hz). */
+export const COVERAGE_MIN_INTERVAL_MS = 33;
+
 const PROBE_YAW = 45; // the controller's hard limits: how far the probes ask
 const PROBE_PITCH = 30;
 const LIMIT_ANIM_MS = 200;
@@ -117,6 +120,7 @@ export class ViewerLogic {
           coverageView.value = { ...coverageView.value, stale };
       },
       onError: (e) => this.deps.onError?.(e),
+      minIntervalMs: COVERAGE_MIN_INTERVAL_MS,
       frame: deps.frame,
       cancelFrame: deps.cancelFrame,
     });

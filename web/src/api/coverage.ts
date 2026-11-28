@@ -66,6 +66,12 @@ export interface LoopOptions<P, R> {
   /** Schedules `cb` for the next animation frame; injectable for tests. */
   frame?: (cb: () => void) => number;
   cancelFrame?: (id: number) => void;
+  /** Smallest time between two requests starting, in ms (rate cap; 0 = none). */
+  minIntervalMs?: number;
+  /** Clock and timer, injectable for tests. */
+  now?: () => number;
+  setTimer?: (cb: () => void, ms: number) => number;
+  clearTimer?: (id: number) => void;
 }
 
 /**
@@ -77,6 +83,8 @@ export class LatestWinsLoop<P, R> {
   private pending: { payload: P } | null = null;
   private inFlight = false;
   private frameId = 0;
+  private timerId = 0;
+  private lastSent = -Infinity;
   private abort: AbortController | null = null;
   private disposed = false;
   private readonly frame: (cb: () => void) => number;
@@ -101,7 +109,18 @@ export class LatestWinsLoop<P, R> {
   }
 
   private flush(): void {
-    if (this.disposed || this.inFlight || !this.pending) return;
+    if (this.disposed || this.inFlight || !this.pending || this.timerId) return;
+    const now = (this.o.now ?? (() => performance.now()))();
+    const wait = this.lastSent + (this.o.minIntervalMs ?? 0) - now;
+    if (wait > 0) {
+      // rate cap: the newest pose goes out as soon as the interval since the last request has passed
+      this.timerId = (this.o.setTimer ?? ((cb, ms) => window.setTimeout(cb, ms)))(() => {
+        this.timerId = 0;
+        this.flush();
+      }, wait);
+      return;
+    }
+    this.lastSent = now;
     const { payload } = this.pending;
     this.pending = null;
     this.inFlight = true;
@@ -136,6 +155,8 @@ export class LatestWinsLoop<P, R> {
     this.pending = null;
     if (this.frameId) this.cancelFrame(this.frameId);
     this.frameId = 0;
+    if (this.timerId) (this.o.clearTimer ?? ((id) => window.clearTimeout(id)))(this.timerId);
+    this.timerId = 0;
     this.abort?.abort();
   }
 }
