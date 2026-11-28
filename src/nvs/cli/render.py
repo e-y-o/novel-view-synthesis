@@ -148,15 +148,13 @@ def run_render(args) -> RenderReport:
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     import numpy as np
     import torch
-    from PIL import UnidentifiedImageError
 
-    from nvs.cache import DepthCache, cache_key
+    from nvs.cache import DepthCache
     from nvs.core.camera import choose_pivot, make_camera, orbit_pose
-    from nvs.core.imageio import load_image, save_image
-    from nvs.core.intrinsics import resolve_intrinsics
-    from nvs.depth.base import DepthError, RawDepth
-    from nvs.depth.refine import refine_depth
+    from nvs.core.imageio import save_image
+    from nvs.depth.base import DepthError
     from nvs.depth.visualize import depth_to_color
+    from nvs.pipeline import PipelineError, analyze_image
     from nvs.render.holes import classify_holes, fill_specks
     from nvs.render.limits import estimate_coverage, limit_orbit
     from nvs.render.splat import SplatOptions, splat
@@ -183,17 +181,7 @@ def run_render(args) -> RenderReport:
     if cuda:
         torch.cuda.reset_peak_memory_stats()
 
-    with timer.stage("load"):
-        try:
-            img = load_image(path, device=device)
-        except UnidentifiedImageError as e:
-            raise CliError(f"cannot read {path.name}: unsupported or corrupt image file") from e
-        except ValueError as e:
-            raise CliError(str(e)) from e
-    rgb = img.rgb
-    _, H, W = rgb.shape
-
-    # --- depth backend (created lazily: only needed when EXIF has no focal length or depth is not cached)
+    # --- load, intrinsics, depth (shared with the server: nvs.pipeline); the backend is created lazily
     backend = None
 
     def get_backend():
@@ -206,54 +194,43 @@ def run_render(args) -> RenderReport:
             backend.load()
         return backend
 
-    estimator = None if args.depth_file is not None else (lambda: get_backend().estimate_focal(rgb))
+    depth_array = None
+    if args.depth_file is not None:
+        try:
+            depth_array = np.load(args.depth_file, allow_pickle=False)
+        except (OSError, ValueError) as e:
+            raise CliError(f"cannot read depth file {args.depth_file.name}: {e}") from e
     try:
-        with timer.stage("intrinsics"):
-            intr = resolve_intrinsics(
-                img.meta, override_f_px=args.f_px, override_35mm=args.focal_35mm, estimator=estimator
-            )
-        warnings.extend(intr.warnings)
-
-        # --- depth
-        cached = False
-        model_name = DEPTH_MODELS[args.depth_model]
-        if args.depth_file is not None:
-            try:
-                d = np.load(args.depth_file, allow_pickle=False)
-            except (OSError, ValueError) as e:
-                raise CliError(f"cannot read depth file {args.depth_file.name}: {e}") from e
-            if d.shape != (H, W):
-                raise CliError(
-                    f"depth file is {d.shape[1]}x{d.shape[0]} but the oriented image is {W}x{H}: "
-                    "they must match"
-                )
-            with timer.stage("depth"):
-                dt = torch.from_numpy(d.astype(np.float32)).to(device)
-                depth_res = refine_depth(RawDepth(dt, intr.f_px, (H, W), 1.0), rgb, model="depth-file")
-            model_name = "depth-file"
-        else:
-            cache = DepthCache(max_bytes=0) if args.no_cache else DepthCache()
-            key = cache_key(img.sha256, model_name, "bf16", intr.f_px)
-            with timer.stage("depth"):
-                depth_res = cache.get(key, device=device)
-                cached = depth_res is not None
-                if depth_res is None:
-                    be = get_backend()
-                    raw = be.infer(rgb, intr.f_px)
-                    depth_res = refine_depth(raw, rgb, model=model_name)
-                    cache.put(key, depth_res, image_sha256=img.sha256)
-        if backend is not None:  # free the VRAM the splat needs
-            backend.unload()
-            backend = None
-            if cuda:
-                torch.cuda.empty_cache()
-        depth, f_px = depth_res.depth, depth_res.f_px
+        analysis = analyze_image(
+            path,
+            get_backend,
+            DepthCache(max_bytes=0) if args.no_cache else DepthCache(),
+            model_name=DEPTH_MODELS[args.depth_model],
+            device=device,
+            override_f_px=args.f_px,
+            override_35mm=args.focal_35mm,
+            depth_array=depth_array,
+            stage=timer.stage,
+        )
+    except PipelineError as e:
+        raise CliError(str(e)) from e
     except DepthError as e:
         raise CliError(str(e)) from e
     except torch.OutOfMemoryError as e:
         raise CliError(
             "GPU out of memory: close other GPU applications and retry (or use --depth-model s)"
         ) from e
+    img, intr, depth_res = analysis.image, analysis.intrinsics, analysis.depth
+    warnings.extend(intr.warnings)
+    cached, model_name = analysis.cached, analysis.model
+    rgb = img.rgb
+    _, H, W = rgb.shape
+    if backend is not None:  # free the VRAM the splat needs
+        backend.unload()
+        backend = None
+        if cuda:
+            torch.cuda.empty_cache()
+    depth, f_px = depth_res.depth, depth_res.f_px
 
     # --- pose
     pivot = choose_pivot(depth, depth_res.sky_mask) if args.pivot == "auto" else float(args.pivot)

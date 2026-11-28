@@ -76,6 +76,15 @@ class WorkerState:
 
     def load(self) -> str:
         """Create and load the backend; returns a one-line description for the status detail."""
+        if not self.config.stub:
+            from nvs.licence import ACCEPT_ENV, license_accepted
+
+            if not license_accepted():
+                raise JobError(
+                    "licence_not_accepted",
+                    f"the Depth Pro 2 licence has not been accepted: run nvs serve --accept-license "
+                    f"or set {ACCEPT_ENV}=1",
+                )
         t0 = time.perf_counter()
         backend = self.make_backend()
         backend.load()
@@ -94,6 +103,8 @@ class WorkerState:
         if self.backend is None:
             try:
                 self.load()
+            except JobError:
+                raise
             except Exception as e:
                 self.load_error = f"{type(e).__name__}: {e}"
                 raise JobError("backend_unavailable", f"depth backend could not load: {e}") from e
@@ -183,6 +194,7 @@ def worker_main(conn_requests: Any, conn_events: Any, config: WorkerConfig) -> N
     # hand so that nothing torch-related is imported first).
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    from nvs.worker import analyze  # noqa: F401  (registers the "analyze" handler; imports torch)
 
     send_lock = threading.Lock()
 

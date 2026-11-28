@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from nvs.api.analysis import AnalysisService
 from nvs.api.config import ServerConfig
 from nvs.api.routes_events import make_events_router
 from nvs.api.routes_sessions import make_sessions_router
@@ -61,6 +62,7 @@ def create_app(
     hub = EventHub()
     worker = worker or WorkerClient(WorkerConfig(stub=config.stub, preload_depth=config.preload_depth))
     scheduler = Scheduler(worker)
+    analysis = AnalysisService(store, scheduler, hub, config.data_dir / "cache")
     worker.add_status_listener(lambda s: hub.publish(status_message(s)))
 
     @asynccontextmanager
@@ -72,6 +74,7 @@ def create_app(
             yield
         finally:
             hub.close()  # WebSocket handlers finish and close their sockets
+            await analysis.close()
             await scheduler.close()
             if config.start_worker:
                 await worker.stop()
@@ -82,6 +85,7 @@ def create_app(
     app.state.hub = hub
     app.state.worker = worker
     app.state.scheduler = scheduler
+    app.state.analysis = analysis
 
     @app.exception_handler(HTTPException)
     async def _http_error(_: Request, exc: HTTPException) -> JSONResponse:
@@ -91,7 +95,11 @@ def create_app(
     async def health() -> dict:
         return {"ok": True, "version": _version(), "stub": config.stub}
 
-    app.include_router(make_sessions_router(store, config.max_upload_bytes, on_created))
+    app.include_router(
+        make_sessions_router(
+            store, config.max_upload_bytes, on_created or analysis.on_created, analysis.on_deleted
+        )
+    )
     app.include_router(make_events_router(hub, store, scheduler))
 
     @app.api_route(

@@ -22,9 +22,9 @@ def _version() -> str:
 
 
 def _commands() -> list[Callable[[argparse._SubParsersAction], None]]:
-    from nvs.cli import render, serve
+    from nvs.cli import export_preview, render, serve
 
-    return [render.register, serve.register]
+    return [render.register, serve.register, export_preview.register]
 
 
 def build_parser() -> argparse.ArgumentParser:
