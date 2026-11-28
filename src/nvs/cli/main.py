@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable, Sequence
 from importlib.metadata import PackageNotFoundError, version
+
+# Must be set before torch initialises CUDA (see nvs.depth.base.configure_cuda_env); harmless otherwise.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 Handler = Callable[[argparse.Namespace], int]
 
@@ -17,24 +21,17 @@ def _version() -> str:
         return "unknown"
 
 
-def _register_render(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("render", help="render a novel view from a single image (not implemented yet)")
-    p.set_defaults(handler=_render)
+def _commands() -> list[Callable[[argparse._SubParsersAction], None]]:
+    from nvs.cli import render
 
-
-def _render(args: argparse.Namespace) -> int:
-    print("render: not implemented")
-    return 1
-
-
-COMMANDS: list[Callable[[argparse._SubParsersAction], None]] = [_register_render]
+    return [render.register]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nvs", description="Fast single-image novel view synthesis.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
-    for register in COMMANDS:
+    for register in _commands():
         register(sub)
     return parser
 
@@ -46,7 +43,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     if handler is None:
         parser.print_help()
         return 0
-    return handler(args)
+    from nvs.cli.render import CliError
+
+    try:
+        return handler(args)
+    except CliError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return e.code
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 1
+    except Exception as e:
+        if getattr(args, "verbose", False):
+            raise
+        print(f"error: {type(e).__name__}: {e} (run with -v for a traceback)", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

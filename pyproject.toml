@@ -3,9 +3,12 @@ name = "nvs"
 version = "0.0.0"
 description = "Fast single-image novel view synthesis with a web GUI"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "depth-pro-2",
+    "numpy>=2.5.5",
     "pillow>=13.0.0",
     "pillow-heif>=1.9.0",
     "torch>=2.14.1",
@@ -55,6 +58,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["E501", "B023"]  # table-printing tools; benchmark lambdas run inside their loop iteration
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

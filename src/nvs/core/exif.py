@@ -15,12 +15,7 @@ from typing import Any, Literal
 
 from PIL import Image
 
-try:
-    import pillow_heif
-
-    pillow_heif.register_heif_opener()
-except ImportError:  # HEIC then fails to open; everything else still works
-    pass
+from nvs.core import _pillow  # noqa: F401  (registers HEIF support)
 
 FULL_FRAME_DIAG_MM = 43.267  # diagonal of a 36x24 mm frame
 
