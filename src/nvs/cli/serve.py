@@ -88,5 +88,5 @@ def _serve(args: argparse.Namespace) -> int:
 
         threading.Timer(1.0, webbrowser.open, args=(url,)).start()
     # uvicorn's own access log is off: our middleware logs request line, status and time (no query/body).
-    uvicorn.run(app, host=config.host, port=config.port, log_level="warning")
+    uvicorn.run(app, host=config.host, port=config.port, log_level="warning", ws_ping_interval=20)
     return 0

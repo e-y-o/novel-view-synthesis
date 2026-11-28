@@ -30,6 +30,7 @@ class ServerConfig:
     preload_depth: bool = True
     open_browser: bool = False
     dev: bool = False  # also accept the Vite dev-server origin
+    start_worker: bool = True  # spawn the GPU worker with the app (tests turn this off)
     web_dist: Path | None = None  # built frontend; default <repo>/web/dist
 
     @property

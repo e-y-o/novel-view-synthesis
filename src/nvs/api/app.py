@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -12,9 +13,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from nvs.api.config import ServerConfig
+from nvs.api.routes_events import make_events_router
 from nvs.api.routes_sessions import make_sessions_router
 from nvs.api.security import SecurityMiddleware
 from nvs.api.sessions import Session, SessionStore
+from nvs.jobs.events import EventHub
+from nvs.jobs.scheduler import Scheduler
+from nvs.worker.client import WorkerClient
+from nvs.worker.protocol import WorkerConfig, WorkerStatus
 
 FALLBACK_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>nvs</title></head>
@@ -41,14 +47,41 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
 
+def status_message(status: WorkerStatus) -> dict:
+    return {"type": "status", "worker": status.state, "detail": status.detail}
+
+
 def create_app(
-    config: ServerConfig | None = None, on_created: Callable[[Session], None] | None = None
+    config: ServerConfig | None = None,
+    on_created: Callable[[Session], None] | None = None,
+    worker: WorkerClient | None = None,
 ) -> FastAPI:
     config = config or ServerConfig()
-    app = FastAPI(title="nvs", docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.config = config
     store = SessionStore(config.data_dir / "sessions")
+    hub = EventHub()
+    worker = worker or WorkerClient(WorkerConfig(stub=config.stub, preload_depth=config.preload_depth))
+    scheduler = Scheduler(worker)
+    worker.add_status_listener(lambda s: hub.publish(status_message(s)))
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        if config.start_worker:
+            await worker.start()
+        scheduler.start()
+        try:
+            yield
+        finally:
+            hub.close()  # WebSocket handlers finish and close their sockets
+            await scheduler.close()
+            if config.start_worker:
+                await worker.stop()
+
+    app = FastAPI(title="nvs", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.state.config = config
     app.state.sessions = store
+    app.state.hub = hub
+    app.state.worker = worker
+    app.state.scheduler = scheduler
 
     @app.exception_handler(HTTPException)
     async def _http_error(_: Request, exc: HTTPException) -> JSONResponse:
@@ -59,6 +92,7 @@ def create_app(
         return {"ok": True, "version": _version(), "stub": config.stub}
 
     app.include_router(make_sessions_router(store, config.max_upload_bytes, on_created))
+    app.include_router(make_events_router(hub, store, scheduler))
 
     @app.api_route(
         "/api/{rest:path}",
