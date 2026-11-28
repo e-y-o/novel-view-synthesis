@@ -3,9 +3,12 @@
  * checks exposed on `window.__renderer` / `window.__dev` for manual and automated use (T15 Playwright).
  */
 import {
+  CameraController,
+  attachControllerInput,
   decodeHalfArray,
   defaultOrbit,
   identityPose,
+  medianDepthAround,
   orbitPose,
   type OrbitParams,
 } from "../src/camera";
@@ -73,47 +76,42 @@ function fitCanvasToImage(): void {
 }
 fitCanvasToImage();
 
-// ---- orbit state --------------------------------------------------------------------------------------
+// ---- camera controller (T11): pointer, wheel, keyboard; the page only draws what it reports ------------
 const orbit: OrbitParams = defaultOrbit(assets.meta.pivot_z);
+let bench = params.get("bench") === "1";
+const controller = new CameraController({
+  pivotZ: assets.meta.pivot_z,
+  onChange: (o, camera) => {
+    Object.assign(orbit, o);
+    renderer.setCamera(camera); // requests one draw
+  },
+  depthAt: (x, y) => {
+    const p = renderer.canvasToImage(x, y);
+    return p
+      ? medianDepthAround(
+          assets.depth,
+          assets.sky,
+          assets.meta.preview_width,
+          assets.meta.preview_height,
+          p[0],
+          p[1],
+        )
+      : null;
+  },
+});
+function syncViewport(): void {
+  const fit = renderer.layout;
+  if (fit) controller.setViewport(canvas.width, assets.meta.f_px_preview * fit.scale);
+}
+syncViewport();
+window.addEventListener("resize", syncViewport);
+attachControllerInput(controller, canvas); // sets tabindex, touch-action and cursors
+canvas.style.outline = "none";
+/** Apply the `orbit` object directly (benchmarks and scripted checks). */
 function apply(): void {
+  controller.setOrbit(orbit);
   renderer.setCamera(orbitPose(orbit));
 }
-let bench = params.get("bench") === "1";
-let dragging = false;
-let lx = 0;
-let ly = 0;
-canvas.addEventListener("pointerdown", (e) => {
-  dragging = true;
-  lx = e.clientX;
-  ly = e.clientY;
-  canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener("pointerup", (e) => {
-  dragging = false;
-  canvas.releasePointerCapture(e.pointerId);
-});
-canvas.addEventListener("pointermove", (e) => {
-  if (!dragging || bench) return;
-  orbit.yawDeg = Math.max(-45, Math.min(45, orbit.yawDeg - (e.clientX - lx) * 0.2));
-  orbit.pitchDeg = Math.max(-30, Math.min(30, orbit.pitchDeg + (e.clientY - ly) * 0.2));
-  lx = e.clientX;
-  ly = e.clientY;
-  apply();
-});
-canvas.addEventListener(
-  "wheel",
-  (e) => {
-    e.preventDefault();
-    const p = orbit.pivotZ;
-    orbit.dolly = Math.max(-p * 0.5, Math.min(p * 0.8, orbit.dolly - e.deltaY * 0.001 * p));
-    apply();
-  },
-  { passive: false },
-);
-canvas.addEventListener("dblclick", () => {
-  Object.assign(orbit, defaultOrbit(orbit.pivotZ));
-  apply();
-});
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     bench = !bench;
@@ -381,6 +379,8 @@ async function loadScene(name: string): Promise<void> {
   await renderer.loadAssets(assets);
   Object.assign(orbit, defaultOrbit(assets.meta.pivot_z));
   fitCanvasToImage();
+  controller.setPivot(assets.meta.pivot_z);
+  syncViewport();
   apply();
 }
 
@@ -522,6 +522,7 @@ Object.assign(window, {
     compareWithReference,
     quadStats,
     loadScene,
+    controller,
     setOptions,
     renderFilled,
     orbit,

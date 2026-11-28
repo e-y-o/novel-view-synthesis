@@ -88,3 +88,39 @@ export function choosePivot(depth: Float32Array | Uint16Array, sky: Uint8Array, 
   const p = (values[lo] as number) + ((values[hi] as number) - (values[lo] as number)) * (pos - lo);
   return Math.min(p, cap);
 }
+
+/**
+ * Median depth [m] of the non-sky, finite, positive pixels in a (2·radius+1)² window around image pixel
+ * `(u, v)` (rounded to the nearest pixel), or `null` if there is none (for example when sky is clicked).
+ * `depth` is `Float32Array` metres or `Uint16Array` half-float bit patterns (`depth.f16`).
+ */
+export function medianDepthAround(
+  depth: Float32Array | Uint16Array,
+  sky: Uint8Array,
+  width: number,
+  height: number,
+  u: number,
+  v: number,
+  radius = 2,
+): number | null {
+  const cx = Math.round(u);
+  const cy = Math.round(v);
+  if (cx < 0 || cy < 0 || cx >= width || cy >= height) return null;
+  const isHalf = depth instanceof Uint16Array;
+  const values: number[] = [];
+  for (let y = Math.max(0, cy - radius); y <= Math.min(height - 1, cy + radius); y += 1) {
+    for (let x = Math.max(0, cx - radius); x <= Math.min(width - 1, cx + radius); x += 1) {
+      const i = y * width + x;
+      if (sky[i] !== 0) continue;
+      const raw = depth[i] as number;
+      const d = isHalf ? halfToFloat(raw) : raw;
+      if (Number.isFinite(d) && d > 0) values.push(d);
+    }
+  }
+  if (values.length === 0) return null;
+  values.sort((a, b) => a - b);
+  const mid = values.length >> 1;
+  return values.length % 2
+    ? (values[mid] as number)
+    : ((values[mid - 1] as number) + (values[mid] as number)) / 2;
+}
