@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 CHUNK = 1024 * 1024
 
@@ -18,6 +19,11 @@ class StoredUpload:
     path: Path
     size: int
     sha256: str
+
+
+def _write(out, digest, chunk: bytes) -> None:
+    digest.update(chunk)
+    out.write(chunk)
 
 
 async def read_upload_limited(
@@ -43,8 +49,7 @@ async def read_upload_limited(
                         status_code=413,
                         detail=f"file larger than the {max_bytes // (1024 * 1024)} MB limit",
                     )
-                digest.update(chunk)
-                out.write(chunk)
+                await run_in_threadpool(_write, out, digest, chunk)  # keep disk/hash work off the event loop
     except BaseException:
         path.unlink(missing_ok=True)
         raise

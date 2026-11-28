@@ -22,9 +22,9 @@ import torch
 from PIL import Image, ImageCms, ImageOps
 
 from nvs.core import _pillow  # noqa: F401  (registers HEIF support)
+from nvs.core._pillow import MAX_PIXELS
 from nvs.core.exif import EXIF_IFD, ORIENTATION, PIXEL_X_DIM, PIXEL_Y_DIM, ImageMeta, extract_image_meta
 
-MAX_PIXELS = 100_000_000
 GPS_IFD = 0x8825
 MAKER_NOTE = 0x927C  # holds absolute offsets that break when EXIF is rewritten
 USER_COMMENT = 0x9286
