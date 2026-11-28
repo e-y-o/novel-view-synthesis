@@ -90,7 +90,16 @@ def test_package_files_sizes_and_contract(tmp_path):
     assert info["f_px_preview"] == pytest.approx(info["f_px_source"] * info["scale"], abs=1e-6)
     assert (info["width"], info["height"]) == (2400, 1600)
     assert info["intrinsics"] == {"source": "35mm", "assumed": False, "warnings": ["warn"]}
-    assert set(info["depth"]) == {"min", "max", "p20", "sky_depth", "model", "infer_size", "cached"}
+    assert set(info["depth"]) == {
+        "min",
+        "max",
+        "p20",
+        "sky_depth",
+        "model",
+        "infer_size",
+        "cached",
+        "cache_key",
+    }
     d = info["depth"]
     assert d["model"] == "stub" and d["infer_size"] == [1600, 2400] and d["cached"] is True
     assert d["sky_depth"] == pytest.approx(80.0)

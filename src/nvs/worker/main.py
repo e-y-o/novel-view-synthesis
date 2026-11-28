@@ -194,7 +194,7 @@ def worker_main(conn_requests: Any, conn_events: Any, config: WorkerConfig) -> N
     # hand so that nothing torch-related is imported first).
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    from nvs.worker import analyze  # noqa: F401  (registers the "analyze" handler; imports torch)
+    from nvs.worker import analyze, render_jobs  # noqa: F401  (register the job handlers; import torch)
 
     send_lock = threading.Lock()
 

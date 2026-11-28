@@ -42,6 +42,7 @@ class AnalysisResult:
     image: LoadedImage
     model: str
     cached: bool
+    cache_key: str | None = None  # depth cache entry (None for a depth file)
 
 
 def analyze_image(
@@ -98,6 +99,7 @@ def analyze_image(
 
     report("depth", 25.0)
     cached = False
+    key: str | None = None
     if depth_array is not None:
         d = depth_array
         if d.shape != (H, W):
@@ -122,4 +124,6 @@ def analyze_image(
                 cancel()
                 depth_res = refine_depth(raw, rgb, model=model)
                 cache.put(key, depth_res, image_sha256=img.sha256)
-    return AnalysisResult(depth=depth_res, intrinsics=intr, image=img, model=model, cached=cached)
+    return AnalysisResult(
+        depth=depth_res, intrinsics=intr, image=img, model=model, cached=cached, cache_key=key
+    )

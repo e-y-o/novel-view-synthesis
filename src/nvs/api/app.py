@@ -9,12 +9,15 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from nvs.api.analysis import AnalysisService
 from nvs.api.config import ServerConfig
+from nvs.api.errors import ApiError
 from nvs.api.routes_events import make_events_router
+from nvs.api.routes_render import make_render_router
 from nvs.api.routes_sessions import make_sessions_router
 from nvs.api.security import SecurityMiddleware
 from nvs.api.sessions import Session, SessionStore
@@ -91,6 +94,17 @@ def create_app(
     async def _http_error(_: Request, exc: HTTPException) -> JSONResponse:
         return _error(exc.status_code, f"http_{exc.status_code}", str(exc.detail))
 
+    @app.exception_handler(ApiError)
+    async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
+        return _error(exc.status, exc.code, exc.message)
+
+    @app.exception_handler(RequestValidationError)
+    async def _invalid(_: Request, exc: RequestValidationError) -> JSONResponse:
+        first = exc.errors()[0] if exc.errors() else {}
+        where = ".".join(str(p) for p in first.get("loc", ()) if p != "body")
+        message = str(first.get("msg", "invalid request")).removeprefix("Value error, ")
+        return _error(422, "invalid_request", f"{where}: {message}" if where else message)
+
     @app.get("/api/health")
     async def health() -> dict:
         return {"ok": True, "version": _version(), "stub": config.stub}
@@ -101,6 +115,7 @@ def create_app(
         )
     )
     app.include_router(make_events_router(hub, store, scheduler))
+    app.include_router(make_render_router(store, scheduler, config.data_dir / "cache"))
 
     @app.api_route(
         "/api/{rest:path}",

@@ -77,6 +77,7 @@ def analyze(ctx: JobContext, payload: dict[str, Any]) -> dict[str, Any]:
                 meta=analysis.image.meta,
                 exif_bytes=analysis.image.exif_bytes,
                 cached=analysis.cached,
+                cache_key=analysis.cache_key,
                 warnings=list(analysis.image.notes) + list(analysis.depth.notes),
             )
     except PipelineError as e:
