@@ -4,6 +4,7 @@ Rule order (design plan 4.1): FocalLengthIn35mmFilm, then FocalLength + FocalPla
 else f_px=None (caller falls back to the depth model's estimator, then a 26 mm default).
 Prototyped and checked against real samples in M0 ticket T05.
 """
+
 from __future__ import annotations
 
 import math
@@ -89,9 +90,15 @@ def extract_image_meta(path: str | Path) -> ImageMeta:
     unit = ifd.get(FOCAL_PLANE_UNIT, 2) if fpr else None
     px_x, px_y = _num(ifd.get(PIXEL_X_DIM)), _num(ifd.get(PIXEL_Y_DIM))
     zoom = _num(ifd.get(DIGITAL_ZOOM))
-    for name, v in [("FocalLengthIn35mmFilm", f35), ("FocalLength", fl), ("FocalPlaneXResolution", fpr),
-                    ("FocalPlaneResolutionUnit", unit), ("PixelXDimension", px_x),
-                    ("PixelYDimension", px_y), ("DigitalZoomRatio", zoom)]:
+    for name, v in [
+        ("FocalLengthIn35mmFilm", f35),
+        ("FocalLength", fl),
+        ("FocalPlaneXResolution", fpr),
+        ("FocalPlaneResolutionUnit", unit),
+        ("PixelXDimension", px_x),
+        ("PixelYDimension", px_y),
+        ("DigitalZoomRatio", zoom),
+    ]:
         if v is not None:
             raw[name] = v
 
@@ -106,13 +113,17 @@ def extract_image_meta(path: str | Path) -> ImageMeta:
         if (ex_w > ex_h) != (stored_w > stored_h) and abs(ex_h / ex_w - file_aspect) < 0.01 * file_aspect:
             # Tags describe the frame before rotation was baked into the pixels (common after
             # editing/downscaling: Orientation reset to 1 but PixelX/YDimension left as shot).
-            warnings.append(f"EXIF size {ex_w}x{ex_h} is rotated relative to file {stored_w}x{stored_h} "
-                            "(rotation baked into pixels)")
+            warnings.append(
+                f"EXIF size {ex_w}x{ex_h} is rotated relative to file {stored_w}x{stored_h} "
+                "(rotation baked into pixels)"
+            )
             ex_w, ex_h = ex_h, ex_w
         if (ex_w, ex_h) != (stored_w, stored_h):
             if abs(ex_w / ex_h - file_aspect) > 0.01 * file_aspect:
-                warnings.append(f"cropped: EXIF size {ex_w}x{ex_h} vs file {stored_w}x{stored_h}; "
-                                "35mm-equivalent refers to the uncropped frame")
+                warnings.append(
+                    f"cropped: EXIF size {ex_w}x{ex_h} vs file {stored_w}x{stored_h}; "
+                    "35mm-equivalent refers to the uncropped frame"
+                )
             else:
                 warnings.append(f"resized: EXIF size {ex_w}x{ex_h} vs file {stored_w}x{stored_h}")
         ref_w = ex_w
