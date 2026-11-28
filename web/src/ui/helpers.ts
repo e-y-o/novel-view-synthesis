@@ -53,6 +53,11 @@ export interface ErrorInfo {
 }
 
 const BY_CODE: Record<string, ErrorInfo> = {
+  unsupported_type: {
+    title: "Not a supported image",
+    message: `Use ${FORMATS_TEXT}.`,
+    action: "choose",
+  },
   gpu_oom: {
     title: "Not enough GPU memory",
     message: "Close other GPU applications (browsers and games use video memory) and try again.",
@@ -110,6 +115,13 @@ const BY_CODE: Record<string, ErrorInfo> = {
 
 /** Map an API/worker error to the banner text. Falls back on the HTTP status, then on the raw message. */
 export function describeError(code: string, status = 0, message = ""): ErrorInfo {
+  if (code === "unsupported_type") {
+    // chosen in the browser before any upload: the message names the file
+    return {
+      ...(BY_CODE["unsupported_type"] as ErrorInfo),
+      message: message || `Use ${FORMATS_TEXT}.`,
+    };
+  }
   const known = BY_CODE[code];
   if (known) return known;
   if (status === 415) return BY_CODE["unsupported_image"] as ErrorInfo;

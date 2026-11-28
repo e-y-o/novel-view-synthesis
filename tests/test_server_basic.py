@@ -190,3 +190,20 @@ def test_serve_help_is_fast_and_lazy():
     dt, heavy = out.strip().splitlines()[-1].split(" ", 1)
     assert float(dt) < 1.0, out
     assert heavy == "[]", out
+
+
+def test_debug_routes_exist_only_with_stub_and_dev(tmp_path):
+    for dev, stub, expected in [(True, True, 200), (False, True, 404), (True, False, 404)]:
+        config = ServerConfig(
+            port=PORT,
+            data_dir=tmp_path / f"{dev}{stub}",
+            stub=stub,
+            dev=dev,
+            start_worker=False,
+            web_dist=tmp_path / "x",
+        )
+        with TestClient(create_app(config), base_url=f"http://127.0.0.1:{PORT}") as c:
+            r = c.post("/api/debug/kill-worker")
+            assert r.status_code == expected, (dev, stub, r.text)
+            if expected == 200:
+                assert r.json() == {"killed": False}  # no worker process in this test

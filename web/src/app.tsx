@@ -104,7 +104,7 @@ export function App() {
             <div class="empty">
               <DropZone
                 onFile={(f) => void startUpload(f)}
-                onReject={(msg) => showError("unsupported_image", 415, msg)}
+                onReject={(msg) => showError("unsupported_type", 0, msg)}
               />
             </div>
           )}

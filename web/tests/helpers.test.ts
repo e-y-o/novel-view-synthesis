@@ -98,6 +98,18 @@ describe("describeError", () => {
     }
   });
 
+  it("names the file for a type rejected in the browser", () => {
+    const e = describeError(
+      "unsupported_type",
+      0,
+      '"notes.txt" is not a supported image. Use JPEG, PNG, WebP or HEIC.',
+    );
+    expect(e.title).toBe("Not a supported image");
+    expect(e.message).toContain("notes.txt");
+    expect(e.action).toBe("choose");
+    expect(describeError("unsupported_type").message).toContain("JPEG");
+  });
+
   it("falls back on the HTTP status, then on the server message", () => {
     expect(describeError("http_415", 415).title).toMatch(/could not be read/);
     expect(describeError("http_413", 413).message).toMatch(/200 MB/);
