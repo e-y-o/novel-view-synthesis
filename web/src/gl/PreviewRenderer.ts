@@ -47,9 +47,31 @@ export interface RendererOptions {
   antialias?: boolean;
 }
 
+/** How quads that span a depth jump or stretch too much are removed. */
+export type CutMode = "tau" | "stretch";
+
 export interface DrawOptions {
-  /** Cut threshold on max(z)/min(z) over a quad's corners. Default 1.08 (T10 makes this adaptive). */
+  /**
+   * `"stretch"` (default): remove or fade quads by how much they are stretched in the target view; nothing is
+   * cut at the identity pose and steep but smooth surfaces survive. `"tau"`: the T09 rule, a global cut when
+   * max(z)/min(z) over a quad's corners exceeds `cutTau` (kept for A/B comparison).
+   */
+  cutMode: CutMode;
+  /** `"tau"` mode threshold on max(z)/min(z). Default 1.08. */
   cutTau: number;
+  /** `"stretch"` mode: stretch factor where a quad starts to fade. 1 = unstretched. Default 2. */
+  stretchFade: number;
+  /** `"stretch"` mode: stretch factor where a quad is fully removed. Default 5. */
+  stretchCut: number;
+  /**
+   * `"stretch"` mode: the two thresholds are multiplied by this on quads with no depth jump (depth ratio under
+   * ~1.04), which may legitimately stretch a lot, e.g. the side of a thin pole seen at an angle. Default 4.
+   */
+  stretchSmoothFactor: number;
+  /** Soft alpha between `stretchFade` and `stretchCut` (two passes; the faded quads blend over what is behind). */
+  feather: boolean;
+  /** Always remove quads that straddle sky and non-sky (the sky depth is an artificial clamp). Default false. */
+  skyBoundaryCut: boolean;
   /** Draw pixels the sky mask marks as sky. Default true. */
   showSky: boolean;
   /** Colour shown where the mesh is cut or absent, linear 0..1 RGB. Default neutral dark grey. */
@@ -83,7 +105,17 @@ export class ShaderError extends Error {
   }
 }
 
-const DEFAULTS: DrawOptions = { cutTau: 1.08, showSky: true, background: [0.14, 0.14, 0.14] };
+const DEFAULTS: DrawOptions = {
+  cutMode: "stretch",
+  cutTau: 1.08,
+  stretchFade: 2,
+  stretchCut: 5,
+  stretchSmoothFactor: 4,
+  feather: true,
+  skyBoundaryCut: false,
+  showSky: true,
+  background: [0.14, 0.14, 0.14],
+};
 const NEAR = 0.02;
 const FRAME_WINDOW = 120;
 const IDLE_GAP_MS = 500;
@@ -109,10 +141,17 @@ const UNIFORMS = [
   "uRt",
   "uT",
   "uClipScale",
+  "uMode",
   "uTau",
+  "uFade",
+  "uCutAt",
+  "uSmoothK",
+  "uFeather",
+  "uSkyCut",
   "uNear",
   "uFar",
   "uShowSky",
+  "uPass",
 ] as const;
 
 export class PreviewRenderer {
@@ -125,6 +164,7 @@ export class PreviewRenderer {
   private assets: SessionAssets | null = null;
   private res: Resources | null = null;
   private fit: ContainFit | null = null;
+  private fixedSize: [number, number] | null = null;
   private lost = false;
   private disposed = false;
   private dirty = false;
@@ -301,12 +341,25 @@ export class PreviewRenderer {
     this.requestRender();
   }
 
+  /**
+   * Use an exact backing-store size (device pixels) instead of the CSS size, for benchmarks and pixel-exact
+   * comparisons; `null` goes back to following the CSS size. Applies immediately.
+   */
+  setFixedSize(size: [number, number] | null): void {
+    this.fixedSize = size;
+    this.resize();
+  }
+
   /** Match the canvas backing store to its CSS size × `devicePixelRatio` and refit the image. */
   resize(): void {
     const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
     const max = this.gl.getParameter(this.gl.MAX_VIEWPORT_DIMS) as Int32Array;
-    const w = Math.min(Math.max(1, Math.round(this.canvas.clientWidth * dpr)), max[0] ?? 4096);
-    const h = Math.min(Math.max(1, Math.round(this.canvas.clientHeight * dpr)), max[1] ?? 4096);
+    const wanted = this.fixedSize ?? [
+      Math.round(this.canvas.clientWidth * dpr),
+      Math.round(this.canvas.clientHeight * dpr),
+    ];
+    const w = Math.min(Math.max(1, wanted[0]), max[0] ?? 4096);
+    const h = Math.min(Math.max(1, wanted[1]), max[1] ?? 4096);
     if (this.canvas.width !== w) this.canvas.width = w;
     if (this.canvas.height !== h) this.canvas.height = h;
     this.fit = this.assets
@@ -362,7 +415,16 @@ export class PreviewRenderer {
     gl.uniformMatrix3fv(u.uRt ?? null, false, new Float32Array([...R[0], ...R[1], ...R[2]]));
     gl.uniform3f(u.uT ?? null, this.camera.t[0], this.camera.t[1], this.camera.t[2]);
     gl.uniform2f(u.uClipScale ?? null, kx, ky);
+    gl.uniform1i(u.uMode ?? null, this.options.cutMode === "tau" ? 0 : 1);
     gl.uniform1f(u.uTau ?? null, this.options.cutTau);
+    gl.uniform1f(u.uFade ?? null, this.options.stretchFade);
+    gl.uniform1f(
+      u.uCutAt ?? null,
+      Math.max(this.options.stretchCut, this.options.stretchFade + 1e-3),
+    );
+    gl.uniform1f(u.uSmoothK ?? null, Math.max(1, this.options.stretchSmoothFactor));
+    gl.uniform1i(u.uFeather ?? null, this.options.feather ? 1 : 0);
+    gl.uniform1i(u.uSkyCut ?? null, this.options.skyBoundaryCut ? 1 : 0);
     gl.uniform1f(u.uNear ?? null, NEAR);
     gl.uniform1f(u.uFar ?? null, Math.max(a.meta.depth.max * 4, 50));
     gl.uniform1i(u.uShowSky ?? null, this.options.showSky ? 1 : 0);
@@ -377,7 +439,19 @@ export class PreviewRenderer {
       query = gl.createQuery();
       if (query) gl.beginQuery(timer.ext.TIME_ELAPSED_EXT, query);
     }
-    gl.drawArrays(gl.TRIANGLES, 0, this.meshCols * rows * 6);
+    const count = this.meshCols * rows * 6;
+    gl.uniform1i(u.uPass ?? null, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, count); // opaque quads write depth
+    if (this.options.cutMode === "stretch" && this.options.feather) {
+      // Faded quads blend over what is behind them and must not hide it: no depth writes, drawn last.
+      gl.uniform1i(u.uPass ?? null, 1);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.drawArrays(gl.TRIANGLES, 0, count);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
     if (timer && query) {
       gl.endQuery(timer.ext.TIME_ELAPSED_EXT);
       timer.pending = query;

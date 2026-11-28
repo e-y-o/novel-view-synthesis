@@ -12,17 +12,34 @@ import {
 import {
   PreviewRenderer,
   RendererUnsupportedError,
+  cutStats,
   fetchAssets,
   meshRows,
   quadCutMask,
+  type CutStats,
+  type DrawOptions,
   type SessionAssets,
 } from "../src/gl";
 
 const params = new URLSearchParams(location.search);
-const scene = params.get("scene") ?? "two_layers";
+let scene = params.get("scene") ?? "two_layers";
 const cols = Number(params.get("cols") ?? 1024);
-const tau = Number(params.get("cut") ?? 1.08);
-const size = params.get("size") ?? "fit";
+const size = params.get("size") ?? "fit"; // fit | 1080p | 4k | native (canvas = preview size)
+const num = (name: string, fallback: number): number => Number(params.get(name) ?? fallback);
+const flag = (name: string, fallback: boolean): boolean =>
+  params.has(name) ? params.get(name) !== "0" : fallback;
+const urlOptions: Partial<DrawOptions> = {
+  cutMode: params.get("mode") === "tau" ? "tau" : "stretch",
+  cutTau: num("cut", 1.08),
+  stretchFade: num("fade", 1.6),
+  stretchCut: num("cutat", 3),
+  stretchSmoothFactor: num("smooth", 2.5),
+  feather: flag("feather", true),
+  skyBoundaryCut: flag("skycut", false),
+  showSky: flag("sky", true),
+};
+if (params.get("bg") === "magenta") urlOptions.background = [1, 0, 1];
+if (params.get("bg") === "gray") urlOptions.background = [0.5, 0.5, 0.5];
 const SIZES: Record<string, [number, number]> = { "1080p": [1920, 1080], "4k": [3840, 2160] };
 
 const canvas = document.getElementById("gl") as HTMLCanvasElement;
@@ -45,10 +62,16 @@ try {
   hud.textContent = e instanceof RendererUnsupportedError ? e.message : String(e);
   throw e;
 }
-const assets = await fetchAssets(`/fixtures/${scene}`);
+let assets = await fetchAssets(`/fixtures/${scene}`);
 await renderer.loadAssets(assets);
-renderer.setOptions({ cutTau: tau });
+renderer.setOptions(urlOptions);
 window.addEventListener("resize", () => renderer.resize());
+
+function fitCanvasToImage(): void {
+  if (size !== "native") return;
+  renderer.setFixedSize([assets.meta.preview_width, assets.meta.preview_height]);
+}
+fitCanvasToImage();
 
 // ---- orbit state --------------------------------------------------------------------------------------
 const orbit: OrbitParams = defaultOrbit(assets.meta.pivot_z);
@@ -115,13 +138,19 @@ const gl = canvas.getContext("webgl2") as WebGL2RenderingContext;
 const dbg = gl.getExtension("WEBGL_debug_renderer_info");
 const gpuName = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "unknown GPU";
 let errorLog: number[] = [];
+function optionsLabel(): string {
+  const o = currentOptions();
+  return o.cutMode === "tau"
+    ? `tau ${o.cutTau}`
+    : `stretch ${o.stretchFade}..${o.stretchCut}${o.feather ? " feather" : ""}${o.skyBoundaryCut ? " skycut" : ""}`;
+}
 setInterval(() => {
   const s = renderer.stats();
   errorLog = errorLog.concat(renderer.glErrors());
   const rows = meshRows(cols, assets.meta.preview_width, assets.meta.preview_height);
   hud.textContent =
     `${scene}  ${assets.meta.preview_width}x${assets.meta.preview_height}  mesh ${cols}x${rows}\n` +
-    `canvas ${canvas.width}x${canvas.height}  cut ${tau}\n` +
+    `canvas ${canvas.width}x${canvas.height}  ${optionsLabel()}\n` +
     `fps ${bench ? s.fps.toFixed(1) : "(idle: draws on change)"}  gpu ${s.gpuMs === null ? "n/a" : s.gpuMs.toFixed(2) + " ms"}  cpu ${s.drawMs?.toFixed(2) ?? "n/a"} ms\n` +
     `yaw ${orbit.yawDeg.toFixed(1)} pitch ${orbit.pitchDeg.toFixed(1)} dolly ${orbit.dolly.toFixed(2)}\n` +
     `GL errors: ${errorLog.length ? errorLog.join(",") : "none"}\n${gpuName}`;
@@ -163,7 +192,7 @@ function checkIdentity(): IdentityReport {
   const W = assets.meta.preview_width;
   const H = assets.meta.preview_height;
   const rows = meshRows(cols, W, H);
-  const cut = quadCutMask(decodeHalfArray(assets.depth), W, H, cols, rows, tau);
+  const cut = quadCutMask(decodeHalfArray(assets.depth), W, H, cols, rows, 1.08);
   const nearCut = (x: number, y: number): boolean => {
     const qx = Math.floor((((x - fit.offsetX) / fit.scale) * cols) / W);
     const qy = Math.floor((((y - fit.offsetY) / fit.scale) * rows) / H);
@@ -324,8 +353,181 @@ async function contextLossCheck(): Promise<Record<string, unknown>> {
   }
 }
 
+// ---- A/B tools ----------------------------------------------------------------------------------------
+const merged: Partial<DrawOptions> = { ...urlOptions };
+function currentOptions(): DrawOptions {
+  return {
+    cutMode: "stretch",
+    cutTau: 1.08,
+    stretchFade: 1.6,
+    stretchCut: 3,
+    stretchSmoothFactor: 2.5,
+    feather: true,
+    skyBoundaryCut: false,
+    showSky: true,
+    background: [0.14, 0.14, 0.14],
+    ...merged,
+  };
+}
+function setOptions(o: Partial<DrawOptions>): void {
+  Object.assign(merged, o);
+  renderer.setOptions(o);
+}
+
+/** Switch fixture scene without reloading the page (`name` is relative to /fixtures). */
+async function loadScene(name: string): Promise<void> {
+  scene = name;
+  assets = await fetchAssets(`/fixtures/${name}`);
+  await renderer.loadAssets(assets);
+  Object.assign(orbit, defaultOrbit(assets.meta.pivot_z));
+  fitCanvasToImage();
+  apply();
+}
+
+/** Canvas pixels as RGBA with the top row first. */
+function readCanvas(): Uint8Array {
+  const w = canvas.width;
+  const h = canvas.height;
+  const raw = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y += 1) {
+    out.set(raw.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+  }
+  return out;
+}
+
+/** Render `yaw/pitch` with the options, over two background colours; a pixel is "filled" if both agree. */
+function renderFilled(
+  yaw: number,
+  pitch: number,
+  options: Partial<DrawOptions> = {},
+): { rgb: Uint8Array; filled: Uint8Array } {
+  const keep = { ...orbit };
+  orbit.yawDeg = yaw;
+  orbit.pitchDeg = pitch;
+  const saved = currentOptions();
+  renderer.setOptions({ ...options, background: [0, 0, 0] });
+  renderer.setCamera(orbitPose(orbit));
+  renderer.render();
+  const a = readCanvas();
+  renderer.setOptions({ background: [1, 1, 1] });
+  renderer.render();
+  const b = readCanvas();
+  renderer.setOptions({ ...saved });
+  Object.assign(orbit, keep);
+  apply();
+  const filled = new Uint8Array(a.length / 4);
+  for (let i = 0; i < filled.length; i += 1) {
+    const d = Math.max(
+      Math.abs((a[i * 4] as number) - (b[i * 4] as number)),
+      Math.abs((a[i * 4 + 1] as number) - (b[i * 4 + 1] as number)),
+      Math.abs((a[i * 4 + 2] as number) - (b[i * 4 + 2] as number)),
+    );
+    filled[i] = d <= 2 ? 1 : 0;
+  }
+  return { rgb: a, filled };
+}
+
+async function loadReference(yaw: number, pitch: number): Promise<Uint8ClampedArray> {
+  const url = `/fixtures/${scene}/ref_${yaw}_${pitch}.png`;
+  const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+  const c = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = c.getContext("2d") as OffscreenCanvasRenderingContext2D;
+  ctx.drawImage(bitmap, 0, 0);
+  return ctx.getImageData(0, 0, bitmap.width, bitmap.height).data;
+}
+
+/**
+ * Compare the preview with the Python splat of the same pose (`scripts/preview_reference.py`; needs
+ * `size=native`). Returns the mean absolute error (0..255) over pixels both renderers fill, and the fractions.
+ */
+async function compareWithReference(
+  yaw: number,
+  pitch = 0,
+  options: Partial<DrawOptions> = {},
+  baseline?: Partial<DrawOptions>,
+): Promise<Record<string, number>> {
+  const W = assets.meta.preview_width;
+  const H = assets.meta.preview_height;
+  if (canvas.width !== W || canvas.height !== H) {
+    throw new Error(
+      `canvas ${canvas.width}x${canvas.height} != preview ${W}x${H}: use size=native`,
+    );
+  }
+  const ref = await loadReference(yaw, pitch);
+  const { rgb, filled } = renderFilled(yaw, pitch, options);
+  // `baseline`: also report the error on the pixels the baseline variant fills (a like-for-like population)
+  const baseFilled = baseline ? renderFilled(yaw, pitch, baseline).filled : null;
+  let sum = 0;
+  let baseSum = 0;
+  let baseCount = 0;
+  let both = 0;
+  let browser = 0;
+  let python = 0;
+  let large = 0;
+  const m = 2; // ignore a 2 px border (the splat's footprint at the frame edge)
+  for (let y = m; y < H - m; y += 1) {
+    for (let x = m; x < W - m; x += 1) {
+      const i = y * W + x;
+      const pyValid = (ref[i * 4 + 3] as number) > 127;
+      const brValid = filled[i] === 1;
+      if (pyValid) python += 1;
+      if (brValid) browser += 1;
+      if (!pyValid || !brValid) continue;
+      both += 1;
+      let e = 0;
+      for (let c = 0; c < 3; c += 1)
+        e += Math.abs((rgb[i * 4 + c] as number) - (ref[i * 4 + c] as number));
+      sum += e / 3;
+      if (baseFilled && baseFilled[i] === 1) {
+        baseSum += e / 3;
+        baseCount += 1;
+      }
+      if (e / 3 > 40) large += 1;
+    }
+  }
+  const total = (W - 2 * m) * (H - 2 * m);
+  return {
+    mae255: sum / Math.max(both, 1),
+    maeOnBaselineSet: baseCount ? baseSum / baseCount : NaN,
+    bothFraction: both / total,
+    browserFilled: browser / total,
+    pythonFilled: python / total,
+    largeErrorFraction: large / Math.max(both, 1),
+  };
+}
+
+/** Removed / feathered quad counts from the CPU reference at a pose, for the loaded scene. */
+function quadStats(yaw: number, pitch = 0, options: Partial<DrawOptions> = {}): CutStats {
+  const W = assets.meta.preview_width;
+  const H = assets.meta.preview_height;
+  const o = { ...currentOptions(), ...options };
+  return cutStats(
+    decodeHalfArray(assets.depth),
+    assets.sky,
+    { width: W, height: H, cols, rows: meshRows(cols, W, H), f: assets.meta.f_px_preview },
+    orbitPose({ ...orbit, yawDeg: yaw, pitchDeg: pitch }),
+    o,
+  );
+}
+
 Object.assign(window, {
   __renderer: renderer,
-  __dev: { checkIdentity, runBench, leakCheck, contextLossCheck, orbit, assets },
+  __dev: {
+    checkIdentity,
+    runBench,
+    leakCheck,
+    contextLossCheck,
+    compareWithReference,
+    quadStats,
+    loadScene,
+    setOptions,
+    renderFilled,
+    orbit,
+    get assets() {
+      return assets;
+    },
+  },
 });
 apply();
