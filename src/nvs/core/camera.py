@@ -18,6 +18,7 @@ from nvs.core.types import CameraSpec
 
 _PIVOT_PERCENTILE = 20.0
 _DOLLY_MAX_FRACTION = 0.95
+_PIVOT_MAX_SAMPLES = 1_000_000
 
 
 def unproject(u, v, z, f_px: float, W: int, H: int):
@@ -86,9 +87,12 @@ def choose_pivot(depth: torch.Tensor, sky_mask: torch.Tensor | None = None, cap_
     valid = torch.isfinite(depth) & (depth > 0)
     if sky_mask is not None:
         valid &= ~sky_mask
-    vals = depth[valid].flatten().to(torch.float64)
+    vals = depth[valid].flatten()
     if vals.numel() == 0:
         return float(cap_m)
+    if vals.numel() > _PIVOT_MAX_SAMPLES:  # deterministic strided subsample: a 12 MP sort would take ~250 ms
+        vals = vals[:: vals.numel() // _PIVOT_MAX_SAMPLES]
+    vals = vals.to(torch.float64)
     vals, _ = vals.sort()  # torch.quantile has a 16M element limit; linear interpolation as numpy
     pos = _PIVOT_PERCENTILE / 100 * (vals.numel() - 1)
     lo = math.floor(pos)
