@@ -1,0 +1,431 @@
+/* App shell. Tokens come from base.css (dark by default, light by prefers-color-scheme). */
+:root {
+  --warn: #ffcc66;
+  --warn-bg: #3a2f12;
+  --accent-ink: #0b1220;
+  --ok: #4ade80;
+  --panel-w: 320px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --warn: #7a4b00;
+    --warn-bg: #fff1cf;
+    --accent-ink: #ffffff;
+    --ok: #15803d;
+  }
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- top bar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  min-height: 3rem;
+}
+.brand {
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+}
+.filename {
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.spacer {
+  flex: 1;
+}
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.chip.warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn);
+}
+.chip-more summary {
+  cursor: pointer;
+  list-style: none;
+}
+.chip-more ul {
+  position: absolute;
+  z-index: 5;
+  top: 120%;
+  left: 0;
+  min-width: 16rem;
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  background: var(--bg-raised);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: normal;
+}
+.dot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+}
+.dot-light {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+.dot.ready .dot-light {
+  background: var(--ok);
+}
+.dot.starting .dot-light {
+  background: var(--warn);
+}
+.dot.error .dot-light {
+  background: var(--danger);
+}
+
+/* ---- banners ---- */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.banner.error {
+  border-left: 4px solid var(--danger);
+}
+.banner.info {
+  border-left: 4px solid var(--accent);
+}
+.banner-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 18rem;
+}
+.banner-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ---- buttons and fields ---- */
+.btn {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn.icon {
+  padding: 0.1rem 0.55rem;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+.btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-2);
+}
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.5rem;
+}
+.small {
+  font-size: 0.85rem;
+}
+.row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ---- main layout ---- */
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
+  min-height: 0;
+}
+.viewport-pane {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.side {
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.panel {
+  padding: var(--space-3);
+}
+.panel h2,
+.recent h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.panel section + section {
+  margin-top: var(--space-4);
+}
+.pose {
+  font-family: var(--mono);
+  min-height: 1.5em;
+}
+
+@media (max-width: 899px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(50vh, 1fr) auto;
+    overflow-y: auto;
+  }
+  .side {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    overflow-y: visible;
+  }
+}
+
+/* ---- viewport ---- */
+.viewport-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  outline-offset: -3px;
+}
+.viewport-canvas.ready {
+  opacity: 1;
+}
+.blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: blur(18px) brightness(0.7);
+  transform: scale(1.04);
+}
+
+/* ---- empty state ---- */
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--space-4);
+}
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(32rem, 100%);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  border: 2px dashed var(--border);
+  border-radius: calc(var(--radius) * 2);
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background var(--transition);
+}
+.dropzone:hover,
+.dropzone.over {
+  border-color: var(--accent);
+  background: var(--bg-raised);
+}
+.dz-icon {
+  color: var(--fg-muted);
+}
+.dz-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.dropzone p {
+  margin: 0;
+}
+
+/* ---- progress ---- */
+.progress {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.progress-card {
+  min-width: min(22rem, 90%);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 2);
+}
+.progress-card h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.phase {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr;
+  align-items: center;
+  gap: 0 var(--space-2);
+  color: var(--fg-muted);
+}
+.phase.active {
+  color: var(--fg);
+  font-weight: 600;
+}
+.phase.done .phase-mark {
+  color: var(--ok);
+}
+.bar {
+  grid-column: 2;
+  display: block;
+  height: 6px;
+  margin-top: var(--space-1);
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--transition);
+}
+
+/* ---- recent ---- */
+.recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.recent li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.recent li.current .recent-name {
+  font-weight: 600;
+}
+.recent-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1);
+  font: inherit;
+  color: var(--fg);
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.recent-open:hover {
+  border-color: var(--border);
+}
+.recent-open img,
+.thumb-empty {
+  flex: none;
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--border);
+}
+.recent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent {
+  margin-top: var(--space-4);
+}

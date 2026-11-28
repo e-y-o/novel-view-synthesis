@@ -68,6 +68,8 @@ export interface ControllerOptions {
   limits?: HardLimits;
   /** Default: the `prefers-reduced-motion` media query. */
   reducedMotion?: () => boolean;
+  /** Called when pick-pivot mode turns on or off (a UI toggle mirrors it). */
+  onPickMode?: (on: boolean) => void;
   /** Depth (metres, source frame) at a canvas pixel, or `null` for sky / unknown. Needed for pivot picking. */
   depthAt?: (canvasX: number, canvasY: number) => number | null;
 }
@@ -103,6 +105,7 @@ export class CameraController {
   private readonly reducedMotion: () => boolean;
   private readonly onChange: ControllerOptions["onChange"];
   private readonly onCommit: ControllerOptions["onCommit"];
+  private readonly onPickMode: ControllerOptions["onPickMode"];
   private depthAt: ControllerOptions["depthAt"];
   private softLimit: SoftLimit = (o) => o;
   private width = 1000;
@@ -126,6 +129,7 @@ export class CameraController {
     this.reducedMotion = options.reducedMotion ?? reducedMotionDefault;
     this.onChange = options.onChange;
     this.onCommit = options.onCommit;
+    this.onPickMode = options.onPickMode;
     this.depthAt = options.depthAt;
   }
 
@@ -274,7 +278,7 @@ export class CameraController {
    */
   pickPivotAt(x: number, y: number): boolean {
     const z = this.depthAt?.(x, y);
-    this.pick = false;
+    this.setPick(false);
     if (z === null || z === undefined || !(z > 0) || !Number.isFinite(z)) return false;
     this.setPivot(z);
     return true;
@@ -290,8 +294,14 @@ export class CameraController {
 
   /** Toggle "pick pivot" mode (the next click or `pickPivotAt` call uses it). */
   togglePickMode(): boolean {
-    this.pick = !this.pick;
+    this.setPick(!this.pick);
     return this.pick;
+  }
+
+  setPick(on: boolean): void {
+    if (this.pick === on) return;
+    this.pick = on;
+    this.onPickMode?.(on);
   }
 
   /** Keyboard: returns true if the key was handled (the caller should `preventDefault`). */
