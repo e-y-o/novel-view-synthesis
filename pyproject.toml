@@ -8,11 +8,15 @@ license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "depth-pro-2",
+    "fastapi>=0.165.0",
+    "httpx>=0.29.0",
     "numpy>=2.5.5",
     "pillow>=13.0.0",
     "pillow-heif>=1.9.0",
+    "python-multipart>=0.0.34",
     "torch>=2.14.1",
     "torchvision>=0.29.1",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 # PyTorch CUDA 13.0 wheels (stable). Needed for Blackwell (sm_120) support.

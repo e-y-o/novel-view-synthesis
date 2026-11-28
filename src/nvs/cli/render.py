@@ -14,13 +14,9 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-LICENSE_NOTICE = """\
-Depth Pro 2 model weights are released by Apple under a research-only licence (see LICENSE_MODEL in
-https://github.com/apple-aiml-research/ml-depth-pro-2). They are downloaded to your machine on first use
-and are not part of this repository. By continuing you confirm that your use complies with that licence.
-This project is not endorsed by Apple."""
+from nvs.cli.errors import CliError
+from nvs.licence import ACCEPT_ENV, ensure_license
 
-ACCEPT_ENV = "NVS_ACCEPT_DEPTHPRO2_LICENSE"
 HOLE_COLOURS = {"black": (0.0, 0.0, 0.0), "magenta": (1.0, 0.0, 1.0)}
 CLASS_COLOURS = {
     1: (1.0, 0.0, 0.0),
@@ -29,14 +25,6 @@ CLASS_COLOURS = {
 }  # disocclusion, stretch, out of frame
 DEPTH_MODELS = {"h": "depthpro2-h", "s": "depthpro2-s"}
 WARN_FRACTION = 0.25
-
-
-class CliError(Exception):
-    """A user-readable failure (exit code 1)."""
-
-    def __init__(self, message: str, code: int = 1):
-        super().__init__(message)
-        self.code = code
 
 
 @dataclass
@@ -122,41 +110,6 @@ def register(sub: argparse._SubParsersAction) -> None:
 
 
 # ------------------------------------------------------------------------------------------------ helpers
-def _data_dir() -> Path:
-    from nvs.cache import default_cache_root
-
-    return default_cache_root().parent
-
-
-def _license_accepted() -> bool:
-    return (_data_dir() / "depthpro2-license-accepted").exists()
-
-
-def _record_license() -> None:
-    d = _data_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    (d / "depthpro2-license-accepted").write_text("accepted\n")
-
-
-def ensure_license(args) -> None:
-    """Make sure the user has accepted the model licence before weights are downloaded or used."""
-    if _license_accepted():
-        return
-    if args.accept_license or os.environ.get(ACCEPT_ENV) == "1":
-        _record_license()
-        return
-    if sys.stdin is not None and sys.stdin.isatty():
-        print(LICENSE_NOTICE)
-        if input("Accept and continue? [y/N] ").strip().lower() in ("y", "yes"):
-            _record_license()
-            return
-        raise CliError("licence not accepted")
-    raise CliError(
-        f"the Depth Pro 2 licence must be accepted: pass --accept-license or set {ACCEPT_ENV}=1\n"
-        + LICENSE_NOTICE
-    )
-
-
 class _Timer:
     def __init__(self, device):
         self.device, self.t = device, {}
@@ -248,7 +201,7 @@ def run_render(args) -> RenderReport:
         if backend is None:
             from nvs.depth.depthpro2 import DepthPro2Backend
 
-            ensure_license(args)
+            ensure_license(accept=args.accept_license)
             backend = DepthPro2Backend(model=DEPTH_MODELS[args.depth_model])
             backend.load()
         return backend

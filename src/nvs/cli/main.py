@@ -22,9 +22,9 @@ def _version() -> str:
 
 
 def _commands() -> list[Callable[[argparse._SubParsersAction], None]]:
-    from nvs.cli import render
+    from nvs.cli import render, serve
 
-    return [render.register]
+    return [render.register, serve.register]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,7 +43,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if handler is None:
         parser.print_help()
         return 0
-    from nvs.cli.render import CliError
+    from nvs.cli.errors import CliError
 
     try:
         return handler(args)

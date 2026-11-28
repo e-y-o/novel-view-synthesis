@@ -7,9 +7,10 @@ import torch
 from PIL import Image
 from synth import render, scene_two_layers
 
-from nvs.cli import render as cli_render
+from nvs import licence
+from nvs.cli.errors import CliError
 from nvs.cli.main import build_parser, main
-from nvs.cli.render import CliError, run_render
+from nvs.cli.render import run_render
 from nvs.core.camera import make_camera
 
 W, H, F = 256, 192, 250.0
@@ -211,13 +212,13 @@ def test_cpu_without_depth_file_is_explained(photo, capsys):
 
 def test_license_gate(tmp_path, monkeypatch):
     monkeypatch.setenv("NVS_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.delenv(cli_render.ACCEPT_ENV, raising=False)
+    monkeypatch.delenv(licence.ACCEPT_ENV, raising=False)
     args = parse("x.jpg")
     monkeypatch.setattr(sys, "stdin", None)  # non-interactive
     with pytest.raises(CliError, match="--accept-license"):
-        cli_render.ensure_license(args)
-    monkeypatch.setenv(cli_render.ACCEPT_ENV, "1")
-    cli_render.ensure_license(args)
+        licence.ensure_license(accept=args.accept_license)
+    monkeypatch.setenv(licence.ACCEPT_ENV, "1")
+    licence.ensure_license(accept=args.accept_license)
     assert (tmp_path / "depthpro2-license-accepted").exists()
-    monkeypatch.delenv(cli_render.ACCEPT_ENV)
-    cli_render.ensure_license(args)  # remembered
+    monkeypatch.delenv(licence.ACCEPT_ENV)
+    licence.ensure_license(accept=args.accept_license)  # remembered
