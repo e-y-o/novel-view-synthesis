@@ -82,6 +82,7 @@ Frontend development (hot reload, `/api` proxied to the Python server):
 uv run nvs serve --stub --dev          # terminal 1: --dev also accepts the Vite page's origin
 cd web; npm run dev                    # terminal 2: http://localhost:5173
 npm run fixtures                       # synthetic preview assets in web/fixtures/ (no server or model needed)
+                                       # renderer dev page: http://localhost:5173/dev/renderer.html?scene=two_layers
 npm run typecheck; npm test; npm run lint; npm run format
 ```
 

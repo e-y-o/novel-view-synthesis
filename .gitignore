@@ -13,5 +13,4 @@ web/dist/
 .ruff_cache/
 scripts/spikes/
 checkpoints/
-web/spike/public/
 web/fixtures/
